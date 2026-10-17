@@ -69,5 +69,5 @@ jobs:
       - name: Install dependencies
         run: composer update --${{ matrix.stability }} --prefer-dist --no-interaction --with-all-dependencies
       - name: Show installed versions
-        run: composer show laravel/framework orchestra/testbench pestphp/pest phpunit/phpunit | grep -E '^(name|versions)'
+        run: composer show | grep -E '^(laravel/framework|orchestra/testbench|pestphp/pest|phpunit/phpunit) '
       - run: composer test
