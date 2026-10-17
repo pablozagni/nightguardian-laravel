@@ -17,6 +17,7 @@ All options are in `config/nightguardian.php` and can be set via `.env`.
 | `NIGHTGUARDIAN_TIMEOUT` | `2` | Total HTTP timeout (seconds) |
 | `NIGHTGUARDIAN_CONNECT_TIMEOUT` | `1` | |
 | `NIGHTGUARDIAN_SPOOL_MAX_MB` | `10` | |
+| `NIGHTGUARDIAN_SPOOL_MAX_AGE_DAYS` | `7` | Spooled batches older than this are deleted |
 | `NIGHTGUARDIAN_SEND_IP` | `false` | |
 | `NIGHTGUARDIAN_SEND_REQUEST_BODY` | `false` | Scrubbed if enabled |
 | `NIGHTGUARDIAN_SEND_USER_EMAIL` | `false` | |
