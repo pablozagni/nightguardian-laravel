@@ -26,3 +26,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - Privacy defaults: IP, request body and user e-mail/name are opt-in; the user is only read from an auth guard that has
   already loaded it, so capturing an error never queries the database.
 - Tests validate every event type against the protocol's JSON schema (`opis/json-schema`, dev only).
+- Capture (stage L3): `LogListener` on `MessageLogged` (reported exceptions and `Log::error()` calls, level threshold,
+  ignore list, HTTP exceptions below 500 ignored, one event per exception instance), `QueueListener` (`job_failed`),
+  `ScheduleListener` (thrown exceptions and non-zero exit codes, once per run, output tail), `SlowRequestMiddleware`
+  (outermost global middleware, event built after the response) and `SlowQueryListener` (placeholders only, never
+  bindings; at most 5 per request).
+- `NightGuardian::report()`, `message()` and `flush()` (facade). Every entry point is guarded: nothing escapes, nested
+  calls are skipped, failures are only counted. Contexts are made JSON-safe (objects, closures, resources, depth, width).
+- Nothing is registered while the SDK is inactive.

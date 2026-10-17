@@ -3,9 +3,22 @@
 namespace NightGuardian\Laravel;
 
 use Closure;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\ServiceProvider;
+use NightGuardian\Laravel\Capture\LogListener;
+use NightGuardian\Laravel\Capture\QueueListener;
+use NightGuardian\Laravel\Capture\RequestStats;
+use NightGuardian\Laravel\Capture\ScheduleListener;
+use NightGuardian\Laravel\Capture\SlowQueryListener;
+use NightGuardian\Laravel\Capture\SlowRequestMiddleware;
 use NightGuardian\Laravel\Event\EventFactory;
 use NightGuardian\Laravel\Event\Release;
 use NightGuardian\Laravel\Event\RequestContext;
@@ -13,6 +26,9 @@ use NightGuardian\Laravel\Event\RuntimeContext;
 use NightGuardian\Laravel\Event\StackTrace;
 use NightGuardian\Laravel\Event\UserContext;
 use NightGuardian\Laravel\Privacy\Scrubber;
+use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Transport\Buffer;
+use Throwable;
 
 class NightGuardianServiceProvider extends ServiceProvider
 {
@@ -20,7 +36,17 @@ class NightGuardianServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/nightguardian.php', 'nightguardian');
 
-        $this->app->singleton(NightGuardian::class, fn (Application $app) => new NightGuardian($this->config($app)));
+        $this->app->singleton(Buffer::class);
+        $this->app->singleton(RequestStats::class);
+        $this->app->singleton(ScheduleListener::class);
+
+        $this->app->singleton(NightGuardian::class, fn (Application $app) => new NightGuardian(
+            $this->config($app),
+            $app->make(Buffer::class),
+            $app->make(EventFactory::class),
+            null,
+            $app->make(RequestStats::class),
+        ));
 
         $this->app->singleton(Scrubber::class, function (Application $app) {
             $extra = $this->config($app)['scrub_keys'] ?? [];
@@ -58,6 +84,52 @@ class NightGuardianServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../config/nightguardian.php' => $this->app->configPath('nightguardian.php'),
             ], 'nightguardian-config');
+        }
+
+        Guard::run(function () {
+            if (NightGuardian::inactiveReasonFor($this->config($this->app)) === null) {
+                $this->registerCapture();
+            }
+        });
+    }
+
+    /**
+     * Hooks into Laravel. Nothing is registered while the SDK is inactive, so an inactive SDK costs nothing.
+     */
+    private function registerCapture(): void
+    {
+        $config = $this->config($this->app);
+        $events = $this->app['events'];
+
+        $events->listen(MessageLogged::class, [LogListener::class, 'handle']);
+        $events->listen(JobFailed::class, [QueueListener::class, 'handle']);
+        $events->listen(ScheduledTaskStarting::class, [ScheduleListener::class, 'starting']);
+        $events->listen(ScheduledTaskFailed::class, [ScheduleListener::class, 'failed']);
+        $events->listen(ScheduledTaskFinished::class, [ScheduleListener::class, 'finished']);
+
+        $slowQueryMs = (int) ($config['slow_query_ms'] ?? 0);
+        $slowRequestMs = (int) ($config['slow_request_ms'] ?? 0);
+
+        // Slow requests also need the query counter, so the listener runs when either feature is on.
+        if ($slowQueryMs > 0 || $slowRequestMs > 0) {
+            $events->listen(QueryExecuted::class, [SlowQueryListener::class, 'handle']);
+        }
+
+        if ($slowRequestMs > 0 && ! $this->app->runningInConsole()) {
+            $this->registerSlowRequestMiddleware();
+        }
+    }
+
+    private function registerSlowRequestMiddleware(): void
+    {
+        try {
+            $kernel = $this->app->make(HttpKernel::class);
+
+            if (method_exists($kernel, 'prependMiddleware')) {
+                $kernel->prependMiddleware(SlowRequestMiddleware::class);
+            }
+        } catch (Throwable $e) {
+            Guard::record($e);
         }
     }
 

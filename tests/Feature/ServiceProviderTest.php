@@ -1,10 +1,14 @@
 <?php
 
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use NightGuardian\Laravel\Facades\NightGuardian as NightGuardianFacade;
 use NightGuardian\Laravel\NightGuardian;
 use NightGuardian\Laravel\NightGuardianServiceProvider;
+use NightGuardian\Laravel\Transport\Buffer;
 
 function ngClient(array $config): NightGuardian
 {
@@ -99,4 +103,19 @@ it('keeps working when the configuration is garbage', function () {
     expect($client->isActive())->toBeFalse()
         ->and($client->ingestUrl())->toBeNull()
         ->and($client->internalErrors())->toBe(0);
+});
+
+it('registers no capture hooks while the SDK is inactive', function () {
+    expect(app('events')->hasListeners(JobFailed::class))->toBeFalse()
+        ->and(app('events')->hasListeners(QueryExecuted::class))->toBeFalse();
+});
+
+it('captures nothing and keeps quiet while inactive', function () {
+    Log::error('ignored', ['exception' => new RuntimeException('x')]);
+    NightGuardianFacade::report(new RuntimeException('y'));
+    NightGuardianFacade::message('z');
+    NightGuardianFacade::flush();
+
+    expect(app(Buffer::class)->isEmpty())->toBeTrue()
+        ->and(NightGuardianFacade::internalErrors())->toBe(0);
 });

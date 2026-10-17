@@ -2,13 +2,23 @@
 
 namespace NightGuardian\Laravel;
 
+use LogicException;
+use NightGuardian\Laravel\Capture\RequestStats;
+use NightGuardian\Laravel\Event\EventFactory;
+use NightGuardian\Laravel\Support\ContextSanitizer;
+use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Transport\Buffer;
+use NightGuardian\Laravel\Transport\Sender;
+use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
+use WeakMap;
 
 /**
  * Main client (facade root).
  *
- * Capture and transport arrive in later stages; for now it answers the one question every other
- * part of the SDK asks first: "am I active?". It never throws.
+ * Every public method is safe to call from application code: it never throws, never recurses into
+ * itself and does nothing at all when the SDK is inactive.
  */
 class NightGuardian
 {
@@ -16,16 +26,30 @@ class NightGuardian
 
     public const SDK_NAME = 'nightguardian-laravel';
 
-    private int $internalErrors = 0;
+    /** PSR-3 levels from least to most severe. */
+    private const LEVELS = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
+
+    private ?bool $active = null;
+
+    /** @var WeakMap<Throwable, true> */
+    private WeakMap $captured;
 
     /**
      * @param  array<string, mixed>  $config
      */
-    public function __construct(private array $config) {}
+    public function __construct(
+        private array $config,
+        private ?Buffer $buffer = null,
+        private ?EventFactory $factory = null,
+        private ?Sender $sender = null,
+        private ?RequestStats $stats = null,
+    ) {
+        $this->captured = new WeakMap;
+    }
 
     public function isActive(): bool
     {
-        return $this->inactiveReason() === null;
+        return $this->active ??= $this->inactiveReason() === null;
     }
 
     /**
@@ -33,16 +57,24 @@ class NightGuardian
      */
     public function inactiveReason(): ?string
     {
+        return self::inactiveReasonFor($this->config);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    public static function inactiveReasonFor(array $config): ?string
+    {
         try {
             if (! extension_loaded('curl')) {
                 return 'The PHP curl extension is not installed.';
             }
 
-            if (! ($this->config['enabled'] ?? true)) {
+            if (! ($config['enabled'] ?? true)) {
                 return 'Disabled (NIGHTGUARDIAN_ENABLED=false).';
             }
 
-            $url = $this->config['url'] ?? null;
+            $url = $config['url'] ?? null;
 
             if (! is_string($url) || trim($url) === '') {
                 return 'NIGHTGUARDIAN_URL is not set.';
@@ -52,7 +84,7 @@ class NightGuardian
                 return 'NIGHTGUARDIAN_URL must be an absolute http(s) URL.';
             }
 
-            $token = $this->config['token'] ?? null;
+            $token = $config['token'] ?? null;
 
             if (! is_string($token) || trim($token) === '') {
                 return 'NIGHTGUARDIAN_TOKEN is not set.';
@@ -60,7 +92,7 @@ class NightGuardian
 
             return null;
         } catch (Throwable $e) {
-            $this->countInternalError();
+            Guard::record($e);
 
             return 'Configuration could not be read.';
         }
@@ -85,11 +117,164 @@ class NightGuardian
      */
     public function internalErrors(): int
     {
-        return $this->internalErrors;
+        return Guard::errors();
     }
 
     public function countInternalError(): void
     {
-        $this->internalErrors++;
+        Guard::record(new RuntimeException('internal error'));
+    }
+
+    // --- public API ------------------------------------------------------------------------------
+
+    /**
+     * Reports a handled exception.
+     *
+     * @param  array<string, mixed>  $context  Free-form data shown with the event.
+     */
+    public function report(Throwable $throwable, array $context = []): void
+    {
+        Guard::run(fn () => $this->captureThrowable($throwable, 'error', $context, handled: true, respectIgnoreList: false));
+    }
+
+    /**
+     * Reports a message as a log event.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public function message(string $message, string $level = 'error', array $context = []): void
+    {
+        Guard::run(fn () => $this->captureLog($level, $message, $context));
+    }
+
+    /**
+     * Sends everything captured so far. Called automatically at the end of requests, jobs and commands.
+     */
+    public function flush(): void
+    {
+        Guard::run(function () {
+            $this->stats?->reset();
+
+            if ($this->buffer === null || $this->buffer->isEmpty()) {
+                return;
+            }
+
+            $events = $this->buffer->drain();
+
+            $this->sender?->dispatch($events);
+        });
+    }
+
+    // --- used by the capture listeners ----------------------------------------------------------
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function captureThrowable(Throwable $throwable, string $level, array $context = [], bool $handled = false, bool $respectIgnoreList = true): void
+    {
+        if (! $this->canCapture() || $this->alreadyCaptured($throwable)) {
+            return;
+        }
+
+        if ($respectIgnoreList && $this->isIgnored($throwable)) {
+            return;
+        }
+
+        $options = ['level' => $level, 'handled' => $handled];
+
+        if ($context !== []) {
+            $options['context'] = ContextSanitizer::sanitize($context);
+        }
+
+        $this->push($this->factory()->exception($throwable, $options));
+    }
+
+    /**
+     * @param  array<string, mixed>  $context  PSR-3 context (an `exception` entry is ignored here).
+     */
+    public function captureLog(string $level, string $message, array $context = [], ?Throwable $exception = null): void
+    {
+        if (! $this->canCapture()) {
+            return;
+        }
+
+        unset($context['exception']);
+
+        $this->push($this->factory()->log(strtolower($level), $message, ContextSanitizer::sanitize($context), $exception));
+    }
+
+    /**
+     * @param  array<string, mixed>  $event  A complete protocol event built by the EventFactory.
+     */
+    public function push(array $event): void
+    {
+        $this->buffer?->add($event);
+    }
+
+    public function factory(): EventFactory
+    {
+        return $this->factory ?? throw new LogicException('The event factory is not available.');
+    }
+
+    public function canCapture(): bool
+    {
+        return $this->buffer !== null && $this->factory !== null && $this->isActive();
+    }
+
+    /**
+     * Marks the throwable as captured; true when it already was (one event per exception instance).
+     */
+    public function alreadyCaptured(Throwable $throwable): bool
+    {
+        if (isset($this->captured[$throwable])) {
+            return true;
+        }
+
+        $this->captured[$throwable] = true;
+
+        return false;
+    }
+
+    public function meetsLogLevel(string $level): bool
+    {
+        $threshold = array_search(strtolower((string) ($this->config['log_level'] ?? 'error')), self::LEVELS, true);
+        $actual = array_search(strtolower($level), self::LEVELS, true);
+
+        return $actual !== false && $actual >= ($threshold === false ? 4 : $threshold);
+    }
+
+    public function isIgnored(Throwable $throwable): bool
+    {
+        if ($throwable instanceof HttpExceptionInterface && $throwable->getStatusCode() < 500) {
+            return true;
+        }
+
+        $ignored = $this->config['ignore_exceptions'] ?? [];
+
+        foreach (is_array($ignored) ? $ignored : [] as $class) {
+            if (is_string($class) && $throwable instanceof $class) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function config(): array
+    {
+        return $this->config;
+    }
+
+    public function buffer(): ?Buffer
+    {
+        return $this->buffer;
+    }
+
+    public function stats(): ?RequestStats
+    {
+        return $this->stats;
     }
 }

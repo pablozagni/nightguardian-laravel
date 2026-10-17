@@ -1,0 +1,67 @@
+<?php
+
+namespace NightGuardian\Laravel\Capture;
+
+use Illuminate\Database\Events\QueryExecuted;
+use NightGuardian\Laravel\Event\StackTrace;
+use NightGuardian\Laravel\NightGuardian;
+use NightGuardian\Laravel\Support\Guard;
+
+/**
+ * Counts queries for the slow request report and captures the slow ones.
+ *
+ * Only the SQL with its `?` placeholders is sent, never the bindings.
+ */
+class SlowQueryListener
+{
+    private const MAX_SQL = 2000;
+
+    public function __construct(
+        private NightGuardian $client,
+        private RequestStats $stats,
+        private StackTrace $stackTrace,
+    ) {}
+
+    public function handle(QueryExecuted $event): void
+    {
+        Guard::run(function () use ($event) {
+            $this->stats->countQuery();
+
+            $threshold = (int) ($this->client->config()['slow_query_ms'] ?? 0);
+
+            if ($threshold <= 0 || $event->time < $threshold || ! $this->client->canCapture() || ! $this->stats->claimSlowQuery()) {
+                return;
+            }
+
+            $sql = trim((string) preg_replace('/\s+/', ' ', $event->sql));
+
+            $this->client->push($this->client->factory()->slowQuery(
+                mb_substr($sql, 0, self::MAX_SQL),
+                (float) $event->time,
+                $threshold,
+                $event->connectionName,
+                $this->location(),
+            ));
+        });
+    }
+
+    /**
+     * The first application frame that triggered the query.
+     *
+     * @return array{file: string, line: int}|null
+     */
+    private function location(): ?array
+    {
+        $own = str_replace('\\', '/', dirname(__DIR__)).'/';
+
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 60) as $frame) {
+            $file = $frame['file'] ?? null;
+
+            if (is_string($file) && isset($frame['line']) && $this->stackTrace->isInApp($file) && ! str_starts_with(str_replace('\\', '/', $file), $own)) {
+                return ['file' => $file, 'line' => (int) $frame['line']];
+            }
+        }
+
+        return null;
+    }
+}

@@ -1,11 +1,26 @@
 <?php
 
 use NightGuardian\Laravel\Support\Json;
+use NightGuardian\Laravel\Tests\ActiveTestCase;
 use NightGuardian\Laravel\Tests\TestCase;
+use NightGuardian\Laravel\Transport\Buffer;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Validator;
 
 uses(TestCase::class)->in('Feature', 'Unit');
+uses(ActiveTestCase::class)->in('Capture', 'Transport');
+
+/**
+ * Events captured so far in the current app (not yet flushed).
+ *
+ * @return list<array<string, mixed>>
+ */
+function ngCaptured(?string $type = null): array
+{
+    $events = app(Buffer::class)->all();
+
+    return $type === null ? $events : array_values(array_filter($events, fn (array $e) => $e['type'] === $type));
+}
 
 /**
  * Validates events against the protocol v1 JSON schema (a copy lives in tests/fixtures; a test checks it
