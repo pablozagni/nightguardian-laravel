@@ -34,6 +34,9 @@ class NightGuardian
     /** @var WeakMap<Throwable, true> */
     private WeakMap $captured;
 
+    /** @var WeakMap<Throwable, array{reference: string, id: string}> */
+    private WeakMap $references;
+
     /**
      * @param  array<string, mixed>  $config
      */
@@ -45,6 +48,7 @@ class NightGuardian
         private ?RequestStats $stats = null,
     ) {
         $this->captured = new WeakMap;
+        $this->references = new WeakMap;
     }
 
     public function isActive(): bool
@@ -186,7 +190,24 @@ class NightGuardian
             $options['context'] = ContextSanitizer::sanitize($context);
         }
 
-        $this->push($this->factory()->exception($throwable, $options));
+        $event = $this->factory()->exception($throwable, $options);
+
+        if (isset($event['reference'], $event['id'])) {
+            $this->references[$throwable] = ['reference' => (string) $event['reference'], 'id' => (string) $event['id']];
+        }
+
+        $this->push($event);
+    }
+
+    /**
+     * Reference code and event id of the event captured for this very exception instance, if any.
+     * Used by the error page to show the code of the error the user is looking at.
+     *
+     * @return array{reference: string, id: string}|null
+     */
+    public function referenceFor(Throwable $throwable): ?array
+    {
+        return $this->references[$throwable] ?? null;
     }
 
     /**

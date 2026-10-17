@@ -60,6 +60,42 @@ NightGuardian::message('Payment gateway answered late', 'warning', ['gateway' =>
 | `nightguardian:flush` | Sends everything waiting in the spool now |
 | `nightguardian:deploy` | Records a deploy (release, commit, branch) |
 
+## Friendly error page
+
+When an unexpected error ends in a **500** on an **HTML** request and `APP_DEBUG=false`, visitors see a small,
+self-contained page (inline CSS, no external assets, light and dark mode, English and Spanish) with a
+**reference code** like `NG-7F3K-92QD` and an optional "what were you doing?" box. The same code is attached to the
+event in your panel, so a user can quote it to support and you find the exact error in seconds.
+
+| Light | Dark |
+|---|---|
+| ![Error page, light](docs/img/error-page-en-light.png) | ![Error page, dark](docs/img/error-page-en-dark.png) |
+
+- It only replaces the response for errors NightGuardian captured; ignored exceptions, client errors and everything
+  else keep your application's own pages. JSON requests are never changed, they only get an
+  `X-NightGuardian-Reference` header.
+- The comment arrives in the panel as feedback, linked to the original event. The thank-you page tells the truth:
+  *sent* when the collector accepted it, *recorded* when it was queued on disk because the collector is unreachable.
+- The feedback route has no session, cookies or CSRF token (the session may be what is broken). It is protected by a
+  signed, 15-minute form token and a limit of 5 messages per minute per IP.
+- Turn it off with `NIGHTGUARDIAN_ERROR_PAGE=false` or hide the box with `NIGHTGUARDIAN_FEEDBACK=false`. Customise the
+  texts and the view with `php artisan vendor:publish --tag=nightguardian-views` / `--tag=nightguardian-lang`.
+
+## Performance
+
+NightGuardian never works before your response is ready: events are buffered in memory and sent when the request
+terminates, with a 1 s connect and 2 s total timeout. After a failure a circuit breaker stops further attempts for
+60 s (doubling up to 15 min) and events wait in an on-disk spool, so a collector outage costs your requests ~0.
+
+One caveat depends on how PHP runs:
+
+- **PHP-FPM (recommended):** the response is flushed to the browser before the SDK sends anything
+  (`fastcgi_finish_request`). Visitors never wait, even when the collector is down.
+- **`mod_php` (Apache without PHP-FPM, e.g. a default Laragon setup):** PHP cannot release the connection early. The
+  first time the collector is down, the browser may wait **up to ~1 s longer** (the connect timeout) before the request
+  completes. The circuit breaker then opens and the following requests are not delayed. If that matters, lower
+  `NIGHTGUARDIAN_CONNECT_TIMEOUT` or switch to PHP-FPM.
+
 ## Versions
 
 | Laravel | PHP | SDK line |

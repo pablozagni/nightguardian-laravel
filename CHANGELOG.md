@@ -43,3 +43,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   shutdown fallback.
 - Commands: `nightguardian:test`, `nightguardian:status`, `nightguardian:flush`, `nightguardian:deploy`.
 - `testbench.yaml` so the commands can be run from a clone with `vendor/bin/testbench`.
+- Friendly error page (stage L5): `ExceptionHandlerDecorator` shows a self-contained page (inline CSS, no external assets,
+  light/dark, English/Spanish, JavaScript only for an optional copy button) with the `NG-XXXX-XXXX` reference for HTML
+  requests that end in a 500 with `APP_DEBUG=false`. JSON requests only get an `X-NightGuardian-Reference` header. If anything
+  fails the original response is returned; exceptions NightGuardian did not capture keep the application's own page.
+- Feedback box: `POST /nightguardian/feedback` without session, cookies or CSRF, protected by an HMAC-signed 15-minute form
+  token and 5 messages/minute/IP (skipped if the cache is down). Sent synchronously as a `feedback` event linked to the
+  original event; the thank-you page says *sent*, *recorded* (spooled) or that it could not be saved, never claiming a
+  delivery that did not happen.
+- Publishable views and translations (`--tag=nightguardian-views`, `--tag=nightguardian-lang`); README screenshots in
+  `docs/img/`; documented the `mod_php` (no PHP-FPM) caveat in README and `docs/design.md`.
+- New runtime requirements, all part of Laravel: `illuminate/view`, `illuminate/routing`, `illuminate/cache`.

@@ -35,6 +35,12 @@ abstract class ActiveTestCase extends TestCase
         // Errors raised by the code under test must not end up in a real log file.
         $app['config']->set('logging.default', 'null');
 
+        // Signing the feedback form needs an application key; older Testbench skeletons do not set one.
+        $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('k', 32)));
+
+        // The feedback rate limit uses the application cache; Testbench's default store needs a database.
+        $app['config']->set('cache.default', 'array');
+
         // Make this package's directory "the application", so test files count as in-app code.
         $app->singleton(StackTrace::class, fn () => new StackTrace(dirname(__DIR__)));
 

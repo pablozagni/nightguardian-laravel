@@ -7,8 +7,11 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Contracts\View\Factory as ViewFactory;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Illuminate\Log\Events\MessageLogged;
@@ -16,6 +19,7 @@ use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\ServiceProvider;
+use NightGuardian\Laravel\Capture\ExceptionHandlerDecorator;
 use NightGuardian\Laravel\Capture\LogListener;
 use NightGuardian\Laravel\Capture\QueueListener;
 use NightGuardian\Laravel\Capture\RequestStats;
@@ -32,6 +36,7 @@ use NightGuardian\Laravel\Event\RequestContext;
 use NightGuardian\Laravel\Event\RuntimeContext;
 use NightGuardian\Laravel\Event\StackTrace;
 use NightGuardian\Laravel\Event\UserContext;
+use NightGuardian\Laravel\Http\FeedbackSigner;
 use NightGuardian\Laravel\Privacy\Scrubber;
 use NightGuardian\Laravel\Support\Clock;
 use NightGuardian\Laravel\Support\Guard;
@@ -62,6 +67,12 @@ class NightGuardianServiceProvider extends ServiceProvider
             $app->make(Dispatcher::class),
             $app->make(RequestStats::class),
         ));
+
+        $this->app->singleton(FeedbackSigner::class, function (Application $app) {
+            $key = $app['config']->get('app.key');
+
+            return new FeedbackSigner(is_string($key) ? $key : '', $app->make(Clock::class));
+        });
 
         $this->registerTransport();
 
@@ -134,7 +145,18 @@ class NightGuardianServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'nightguardian');
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'nightguardian');
+
         if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/nightguardian'),
+            ], 'nightguardian-views');
+
+            $this->publishes([
+                __DIR__.'/../resources/lang' => $this->app->langPath('vendor/nightguardian'),
+            ], 'nightguardian-lang');
+
             $this->publishes([
                 __DIR__.'/../config/nightguardian.php' => $this->app->configPath('nightguardian.php'),
             ], 'nightguardian-config');
@@ -176,6 +198,7 @@ class NightGuardianServiceProvider extends ServiceProvider
         }
 
         $this->registerFlushPoints($events);
+        $this->registerErrorPage();
     }
 
     /**
@@ -209,6 +232,30 @@ class NightGuardianServiceProvider extends ServiceProvider
                     }
                 });
             });
+        }
+    }
+
+    /**
+     * The friendly 500 page (decorated exception handler) and the signed feedback route.
+     */
+    private function registerErrorPage(): void
+    {
+        $this->app->extend(ExceptionHandler::class, function (ExceptionHandler $handler, Application $app) {
+            if ($handler instanceof ExceptionHandlerDecorator) {
+                return $handler;
+            }
+
+            return new ExceptionHandlerDecorator(
+                $handler,
+                $app->make(NightGuardian::class),
+                $app->make(ViewFactory::class),
+                $app->make(FeedbackSigner::class),
+                $app->make(ConfigRepository::class),
+            );
+        });
+
+        if ((bool) ($this->config($this->app)['feedback'] ?? true)) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/feedback.php');
         }
     }
 

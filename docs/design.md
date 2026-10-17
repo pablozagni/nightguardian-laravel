@@ -54,7 +54,9 @@ It proxies everything to the original handler and only, in `render()`, when all 
 `config('nightguardian.error_page')`, `!config('app.debug')`, response status 500, request expects HTML →
 returns the NightGuardian error view with the reference code. For JSON requests it only adds header
 `X-NightGuardian-Reference` and never changes the body. If anything fails it returns the original response.
-The reference is created at capture time and shared with the decorator through the request-scoped Buffer.
+The reference is created at capture time and remembered per exception instance (`NightGuardian::referenceFor()`),
+so the decorator only shows the code of the very exception it is rendering. If that exception was not captured
+(SDK inactive, ignored, below the log level) the application's own page stays in charge.
 
 > Must be validated per Laravel version in CI (5.8 Handler signature vs 11+ `withExceptions`). If the
 > decorator can't be applied safely on a version, the error page is disabled there and documented.
@@ -72,7 +74,9 @@ capture → Buffer (memory) ──► at terminate ──► Dispatcher
 ```
 
 - **When:** `$app->terminating()` callback. On PHP-FPM, Symfony's `Response::send()` already called
-  `fastcgi_finish_request()`, so the user has the page before we send. Queue workers: flush after
+  `fastcgi_finish_request()`, so the user has the page before we send. **With `mod_php` (no PHP-FPM) PHP cannot
+  release the connection early**: while the collector is down the browser may wait up to ~1 s more (the connect
+  timeout) the first time, until the circuit breaker opens; later requests are not delayed. PHP-FPM is unaffected. Queue workers: flush after
   `JobProcessed`/`JobFailed`. Console: flush on `CommandFinished` and via `register_shutdown_function` as last resort.
   Octane: flush per request via `terminating`.
 - **Batching:** all events of one request/job in one POST (max 100).
