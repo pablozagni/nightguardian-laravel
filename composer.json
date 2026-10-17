@@ -1,0 +1,66 @@
+{
+    "name": "nightguardian/laravel",
+    "description": "Laravel SDK for NightGuardian: self-hosted error and health monitoring that never slows down or breaks your app.",
+    "keywords": ["laravel", "monitoring", "error-tracking", "exceptions", "nightguardian"],
+    "license": "MIT",
+    "homepage": "https://github.com/pablozagni/nightguardian-laravel",
+    "type": "library",
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-zlib": "*",
+        "illuminate/console": "^9.0|^10.0|^11.0|^12.0|^13.0",
+        "illuminate/contracts": "^9.0|^10.0|^11.0|^12.0|^13.0",
+        "illuminate/http": "^9.0|^10.0|^11.0|^12.0|^13.0",
+        "illuminate/log": "^9.0|^10.0|^11.0|^12.0|^13.0",
+        "illuminate/queue": "^9.0|^10.0|^11.0|^12.0|^13.0",
+        "illuminate/support": "^9.0|^10.0|^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.13",
+        "larastan/larastan": "^2.9|^3.0",
+        "opis/json-schema": "^2.3",
+        "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0|^11.0",
+        "pestphp/pest": "^1.23|^2.0|^3.0|^4.0",
+        "pestphp/pest-plugin-laravel": "^1.4|^2.0|^3.0|^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "NightGuardian\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NightGuardian\\Laravel\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "2.x-dev"
+        },
+        "laravel": {
+            "providers": [
+                "NightGuardian\\Laravel\\NightGuardianServiceProvider"
+            ],
+            "aliases": {
+                "NightGuardian": "NightGuardian\\Laravel\\Facades\\NightGuardian"
+            }
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "lint": "vendor/bin/pint --test",
+        "lint:fix": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G"
+    },
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
