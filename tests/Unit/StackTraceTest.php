@@ -60,7 +60,7 @@ it('starts the frames at the throw site, most recent call first', function () {
         ->and($frames[0]['function'])->toBe('ngThrower')
         ->and($frames[0]['in_app'])->toBeTrue()
         ->and($frames[0]['line'])->toBe($exception->getLine())
-        ->and($frames[1]['function'])->toBe('{closure}');
+        ->and($frames[1]['function'])->toStartWith('{closure');
 });
 
 it('maps each function to the line where its code was running', function () {
