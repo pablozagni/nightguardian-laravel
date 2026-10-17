@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Log;
@@ -107,7 +107,7 @@ it('keeps working when the configuration is garbage', function () {
 
 it('registers no capture hooks while the SDK is inactive', function () {
     expect(app('events')->hasListeners(JobFailed::class))->toBeFalse()
-        ->and(app('events')->hasListeners(QueryExecuted::class))->toBeFalse();
+        ->and(app('events')->hasListeners(ScheduledTaskFailed::class))->toBeFalse();
 });
 
 it('captures nothing and keeps quiet while inactive', function () {

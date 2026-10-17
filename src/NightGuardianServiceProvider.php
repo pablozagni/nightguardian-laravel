@@ -3,6 +3,7 @@
 namespace NightGuardian\Laravel;
 
 use Closure;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
@@ -11,7 +12,9 @@ use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\ServiceProvider;
 use NightGuardian\Laravel\Capture\LogListener;
 use NightGuardian\Laravel\Capture\QueueListener;
@@ -19,6 +22,10 @@ use NightGuardian\Laravel\Capture\RequestStats;
 use NightGuardian\Laravel\Capture\ScheduleListener;
 use NightGuardian\Laravel\Capture\SlowQueryListener;
 use NightGuardian\Laravel\Capture\SlowRequestMiddleware;
+use NightGuardian\Laravel\Console\DeployCommand;
+use NightGuardian\Laravel\Console\FlushCommand;
+use NightGuardian\Laravel\Console\StatusCommand;
+use NightGuardian\Laravel\Console\TestCommand;
 use NightGuardian\Laravel\Event\EventFactory;
 use NightGuardian\Laravel\Event\Release;
 use NightGuardian\Laravel\Event\RequestContext;
@@ -26,8 +33,16 @@ use NightGuardian\Laravel\Event\RuntimeContext;
 use NightGuardian\Laravel\Event\StackTrace;
 use NightGuardian\Laravel\Event\UserContext;
 use NightGuardian\Laravel\Privacy\Scrubber;
+use NightGuardian\Laravel\Support\Clock;
 use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Support\SystemClock;
 use NightGuardian\Laravel\Transport\Buffer;
+use NightGuardian\Laravel\Transport\CircuitBreaker;
+use NightGuardian\Laravel\Transport\CurlTransport;
+use NightGuardian\Laravel\Transport\Dispatcher;
+use NightGuardian\Laravel\Transport\Spool;
+use NightGuardian\Laravel\Transport\Stats;
+use NightGuardian\Laravel\Transport\Transport;
 use Throwable;
 
 class NightGuardianServiceProvider extends ServiceProvider
@@ -44,9 +59,11 @@ class NightGuardianServiceProvider extends ServiceProvider
             $this->config($app),
             $app->make(Buffer::class),
             $app->make(EventFactory::class),
-            null,
+            $app->make(Dispatcher::class),
             $app->make(RequestStats::class),
         ));
+
+        $this->registerTransport();
 
         $this->app->singleton(Scrubber::class, function (Application $app) {
             $extra = $this->config($app)['scrub_keys'] ?? [];
@@ -78,12 +95,51 @@ class NightGuardianServiceProvider extends ServiceProvider
         });
     }
 
+    private function registerTransport(): void
+    {
+        $this->app->singleton(Clock::class, SystemClock::class);
+
+        $this->app->singleton(Transport::class, function (Application $app) {
+            $config = $this->config($app);
+            $url = (new NightGuardian($config))->ingestUrl();
+
+            return new CurlTransport(
+                $url ?? '',
+                is_string($config['token'] ?? null) ? trim($config['token']) : '',
+                (float) ($config['timeout'] ?? 2),
+                (float) ($config['connect_timeout'] ?? 1),
+            );
+        });
+
+        $this->app->singleton(Dispatcher::class, function (Application $app) {
+            $config = $this->config($app);
+            $directory = $app->storagePath('nightguardian');
+            $clock = $app->make(Clock::class);
+
+            return new Dispatcher(
+                $app->make(Transport::class),
+                new Spool(
+                    $directory.'/spool',
+                    max(0, (int) ($config['spool_max_mb'] ?? 10)) * 1048576,
+                    (int) ($config['spool_max_age_days'] ?? 7),
+                    $clock,
+                ),
+                new CircuitBreaker($directory.'/breaker.json', $clock),
+                new Stats($directory.'/stats.json'),
+                $clock,
+                $directory.'/drain.lock',
+            );
+        });
+    }
+
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/nightguardian.php' => $this->app->configPath('nightguardian.php'),
             ], 'nightguardian-config');
+
+            $this->commands([TestCommand::class, StatusCommand::class, FlushCommand::class, DeployCommand::class]);
         }
 
         Guard::run(function () {
@@ -117,6 +173,42 @@ class NightGuardianServiceProvider extends ServiceProvider
 
         if ($slowRequestMs > 0 && ! $this->app->runningInConsole()) {
             $this->registerSlowRequestMiddleware();
+        }
+
+        $this->registerFlushPoints($events);
+    }
+
+    /**
+     * Where the buffered events leave: after the response, after each job, after each command, and at
+     * shutdown as a last resort. These listeners are registered after the capture ones on purpose.
+     *
+     * @param  \Illuminate\Contracts\Events\Dispatcher  $events
+     */
+    private function registerFlushPoints($events): void
+    {
+        $flush = fn () => $this->app->make(NightGuardian::class)->flush();
+
+        $this->app->terminating($flush);
+
+        foreach ([JobProcessed::class, JobFailed::class, JobExceptionOccurred::class, CommandFinished::class, ScheduledTaskFinished::class, ScheduledTaskFailed::class] as $event) {
+            $events->listen($event, static fn () => $flush());
+        }
+
+        static $shutdownRegistered = false;
+
+        if (! $shutdownRegistered) {
+            $shutdownRegistered = true;
+            $app = $this->app;
+
+            register_shutdown_function(static function () use ($app) {
+                Guard::run(function () use ($app) {
+                    $buffer = $app->make(Buffer::class);
+
+                    if (! $buffer->isEmpty()) {
+                        $app->make(NightGuardian::class)->flush();
+                    }
+                });
+            });
         }
     }
 

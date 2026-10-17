@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use NightGuardian\Laravel\Capture\SlowRequestMiddleware;
 use NightGuardian\Laravel\NightGuardian as Client;
 use NightGuardian\Laravel\NightGuardianServiceProvider;
+use NightGuardian\Laravel\Transport\Buffer;
 
 function ngQuery(string $sql, float $ms, array $bindings = []): void
 {
@@ -26,7 +27,7 @@ it('captures a slow query without its bindings and with the code location', func
         ->and($events[0]['payload']['sql'])->toBe('select * from invoices where customer_id = ? and date > ?')
         ->and($events[0]['payload']['duration_ms'])->toBe(2350.5)
         ->and($events[0]['payload']['threshold_ms'])->toBe(100)
-        ->and($events[0]['payload']['connection'])->toBe('testing')
+        ->and($events[0]['payload']['connection'])->toBe(DB::connection()->getName())
         ->and($events[0]['payload']['location']['file'])->toBe('tests/Capture/SlowCaptureTest.php')
         ->and(json_encode($events[0]))->not->toContain('2026-01-01')
         ->and(ngSchemaErrors($events[0]))->toBe([]);
@@ -63,7 +64,8 @@ it('allows slow queries again after a flush', function () {
     app(Client::class)->flush();
     ngQuery('select again', 500.0);
 
-    expect(ngCaptured('slow_query'))->toHaveCount(1);
+    expect(app(Buffer::class)->count())->toBe(1)
+        ->and(ngCaptured('slow_query'))->toHaveCount(6);
 });
 
 // --- slow requests --------------------------------------------------------------------------------------

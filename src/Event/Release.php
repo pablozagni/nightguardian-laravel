@@ -41,6 +41,33 @@ class Release
         }
     }
 
+    /**
+     * Full commit SHA and branch name from `.git`, uncached (used by `nightguardian:deploy`).
+     *
+     * @return array{sha: ?string, branch: ?string}
+     */
+    public function gitInfo(): array
+    {
+        try {
+            $gitDir = $this->gitDirectory();
+
+            if ($gitDir === null) {
+                return ['sha' => null, 'branch' => null];
+            }
+
+            $head = trim((string) @file_get_contents($gitDir.'/HEAD'));
+            $isRef = str_starts_with($head, 'ref:');
+            $ref = $isRef ? trim(substr($head, 4)) : null;
+
+            return [
+                'sha' => $this->readSha($gitDir, $head, $ref !== null ? $gitDir.'/'.$ref : null),
+                'branch' => $ref !== null ? (preg_replace('#^refs/heads/#', '', $ref) ?? $ref) : null,
+            ];
+        } catch (Throwable $e) {
+            return ['sha' => null, 'branch' => null];
+        }
+    }
+
     private function fromGit(): ?string
     {
         $gitDir = $this->gitDirectory();

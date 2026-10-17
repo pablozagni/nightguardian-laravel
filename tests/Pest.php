@@ -4,6 +4,7 @@ use NightGuardian\Laravel\Support\Json;
 use NightGuardian\Laravel\Tests\ActiveTestCase;
 use NightGuardian\Laravel\Tests\TestCase;
 use NightGuardian\Laravel\Transport\Buffer;
+use NightGuardian\Laravel\Transport\Transport;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Validator;
 
@@ -17,7 +18,8 @@ uses(ActiveTestCase::class)->in('Capture', 'Transport');
  */
 function ngCaptured(?string $type = null): array
 {
-    $events = app(Buffer::class)->all();
+    // Events still buffered plus events already handed to the (fake) transport by a flush point.
+    $events = array_merge(app(Transport::class)->events(), app(Buffer::class)->all());
 
     return $type === null ? $events : array_values(array_filter($events, fn (array $e) => $e['type'] === $type));
 }

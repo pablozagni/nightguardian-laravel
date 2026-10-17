@@ -34,3 +34,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `NightGuardian::report()`, `message()` and `flush()` (facade). Every entry point is guarded: nothing escapes, nested
   calls are skipped, failures are only counted. Contexts are made JSON-safe (objects, closures, resources, depth, width).
 - Nothing is registered while the SDK is inactive.
+- Transport (stage L4): `Buffer` (one batch per request/job/command, max 100 events), `CurlTransport` (gzip POST, 1 s connect /
+  2 s total timeouts, `Retry-After`, bounded response), `Spool` (gzip files in `storage/nightguardian/spool`, 10 MB / 7 days,
+  oldest deleted first, silent drop when storage is not writable), `CircuitBreaker` (60 s doubling to 15 min, one probe,
+  state in `breaker.json`, 1 h on rejected tokens, `Retry-After` on 429), `Dispatcher` (413 splits the batch, 400 drops it,
+  at most one spooled batch drained per delivery and every 30 s, guarded by a non-blocking `flock`) and persisted counters.
+- Flush points: end of the request (after the response), after each job, after each command and scheduled task, plus a
+  shutdown fallback.
+- Commands: `nightguardian:test`, `nightguardian:status`, `nightguardian:flush`, `nightguardian:deploy`.
+- `testbench.yaml` so the commands can be run from a clone with `vendor/bin/testbench`.

@@ -7,4 +7,10 @@
             <directory suffix="Test.php">./tests</directory>
         </testsuite>
     </testsuites>
+    <php>
+        <!-- The suite must not depend on the developer's shell: it configures the SDK itself. -->
+        <env name="NIGHTGUARDIAN_ENABLED" value="true" force="true"/>
+        <env name="NIGHTGUARDIAN_URL" value="" force="true"/>
+        <env name="NIGHTGUARDIAN_TOKEN" value="" force="true"/>
+    </php>
 </phpunit>

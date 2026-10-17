@@ -23,6 +23,20 @@ composer analyse   # PHPStan
 
 CI runs the full Laravel × PHP matrix (see `docs/compatibility.md`).
 
+### Trying it against a real collector
+
+`testbench.yaml` registers the package, so the Artisan commands work from a clone. With the collector running locally
+(`http://collector.nightguardian.test`) and a project token from its panel or seeder:
+
+```powershell
+$env:NIGHTGUARDIAN_URL = "http://collector.nightguardian.test"
+$env:NIGHTGUARDIAN_TOKEN = "ng_..."
+vendor/bin/testbench nightguardian:test
+vendor/bin/testbench nightguardian:status
+```
+
+The spool and breaker live in `vendor/orchestra/testbench-core/laravel/storage/nightguardian`.
+
 ## Golden rules
 
 1. The SDK must **never** throw into, slow down, or recurse inside the host app. Every public entry point

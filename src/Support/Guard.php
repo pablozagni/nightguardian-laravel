@@ -46,6 +46,34 @@ final class Guard
         }
     }
 
+    /**
+     * Like run(), but for SDK-internal composition: it works inside an already guarded section (no skip),
+     * while still marking the SDK as busy when it is the outermost call.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @param  T  $default
+     * @return T
+     */
+    public static function contain(callable $callback, mixed $default = null): mixed
+    {
+        $owner = ! self::$active;
+        self::$active = true;
+
+        try {
+            return $callback();
+        } catch (Throwable $e) {
+            self::record($e);
+
+            return $default;
+        } finally {
+            if ($owner) {
+                self::$active = false;
+            }
+        }
+    }
+
     public static function busy(): bool
     {
         return self::$active;
