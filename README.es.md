@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/pablozagni/nightguardian-laravel/actions/workflows/ci.yml/badge.svg?branch=1.x)](https://github.com/pablozagni/nightguardian-laravel/actions/workflows/ci.yml?query=branch%3A1.x) [![Latest version](https://img.shields.io/packagist/v/nightguardian/laravel?label=packagist)](https://packagist.org/packages/nightguardian/laravel) [![PHP](https://img.shields.io/packagist/dependency-v/nightguardian/laravel/php?label=php)](https://packagist.org/packages/nightguardian/laravel) [![License: MIT](https://img.shields.io/github/license/pablozagni/nightguardian-laravel)](LICENSE)
 
+[nightguardian.com.ar](https://nightguardian.com.ar) · [Demo en vivo](https://nightguardian.com.ar/try)
+
+<p align="center"><a href="https://nightguardian.com.ar"><img src="docs/img/error-page-es-dark.png" alt="Página de error amable con código de referencia" width="520"></a></p>
+
 SDK oficial de Laravel para [NightGuardian](https://github.com/pablozagni/nightguardian), monitoreo de
 errores self-hosted y open source.
 
