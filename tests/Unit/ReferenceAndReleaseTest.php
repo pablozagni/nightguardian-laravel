@@ -57,7 +57,9 @@ it('never uses the ambiguous letters I, L, O or U', function () {
 });
 
 it('generates different references', function () {
-    $references = array_map(fn () => Reference::generate(), range(1, 100));
+    $references = array_map(function () {
+        return Reference::generate();
+    }, range(1, 100));
 
     expect(count(array_unique($references)))->toBeGreaterThan(95);
 });

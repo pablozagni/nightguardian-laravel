@@ -12,9 +12,20 @@ use Throwable;
  */
 class QueueListener
 {
-    public function __construct(private NightGuardian $client) {}
+    /**
+     * @var NightGuardian
+     */
+    private $client;
 
-    public function handle(JobFailed $event): void
+    public function __construct(NightGuardian $client)
+    {
+        $this->client = $client;
+    }
+
+    /**
+     * @param  JobFailed  $event
+     */
+    public function handle($event): void
     {
         Guard::run(function () use ($event) {
             if (! $this->client->canCapture() || $this->client->alreadyCaptured($event->exception)) {
@@ -22,24 +33,26 @@ class QueueListener
             }
 
             $job = $event->job;
-            $name = $this->read(fn () => $job->resolveName());
-            $queue = $this->read(fn () => $job->getQueue());
-            $attempts = $this->read(fn () => $job->attempts());
+            $name = $this->read(function () use ($job) {
+                return $job->resolveName();
+            });
+            $queue = $this->read(function () use ($job) {
+                return $job->getQueue();
+            });
+            $attempts = $this->read(function () use ($job) {
+                return $job->attempts();
+            });
 
-            $this->client->push($this->client->factory()->jobFailed(
-                is_string($name) && $name !== '' ? $name : $job::class,
-                is_string($queue) ? $queue : null,
-                $event->connectionName,
-                is_int($attempts) ? $attempts : 0,
-                $event->exception,
-            ));
+            $this->client->push($this->client->factory()->jobFailed(is_string($name) && $name !== '' ? $name : get_class($job), is_string($queue) ? $queue : null, $event->connectionName, is_int($attempts) ? $attempts : 0, $event->exception));
         });
     }
 
     /**
      * Job implementations differ between queue drivers; a missing detail must not lose the event.
+     *
+     * @return mixed
      */
-    private function read(callable $getter): mixed
+    private function read(callable $getter)
     {
         try {
             return $getter();

@@ -19,21 +19,55 @@ use Throwable;
  */
 class Dispatcher implements Sender
 {
+    /**
+     * @var Transport
+     */
+    private $transport;
+
+    /**
+     * @var Spool
+     */
+    private $spool;
+
+    /**
+     * @var CircuitBreaker
+     */
+    private $breaker;
+
+    /**
+     * @var Stats
+     */
+    private $stats;
+
+    /**
+     * @var Clock
+     */
+    private $clock;
+
+    /**
+     * @var string
+     */
+    private $lockPath;
+
     /** Minimum time between two automatic drains of the spool. */
     public const DRAIN_INTERVAL_SECONDS = 30;
 
     private const TOKEN_REJECTED_SECONDS = 3600;
 
-    public function __construct(
-        private Transport $transport,
-        private Spool $spool,
-        private CircuitBreaker $breaker,
-        private Stats $stats,
-        private Clock $clock,
-        private string $lockPath,
-    ) {}
+    public function __construct(Transport $transport, Spool $spool, CircuitBreaker $breaker, Stats $stats, Clock $clock, string $lockPath)
+    {
+        $this->transport = $transport;
+        $this->spool = $spool;
+        $this->breaker = $breaker;
+        $this->stats = $stats;
+        $this->clock = $clock;
+        $this->lockPath = $lockPath;
+    }
 
-    public function dispatch(array $events): void
+    /**
+     * @param  mixed[]  $events
+     */
+    public function dispatch($events): void
     {
         $this->deliver($events);
     }
@@ -42,7 +76,7 @@ class Dispatcher implements Sender
      * @param  list<array<string, mixed>>  $events
      * @param  bool  $force  Ignore an open breaker (explicit user actions such as `nightguardian:test`).
      */
-    public function deliver(array $events, bool $force = false): DispatchResult
+    public function deliver($events, $force = false): DispatchResult
     {
         $result = new DispatchResult;
 
@@ -66,8 +100,11 @@ class Dispatcher implements Sender
 
     /**
      * Sends spooled batches, oldest first. `$all` keeps going until the spool is empty or something fails.
+     *
+     * @param  bool  $all
+     * @param  bool  $force
      */
-    public function drain(bool $all = false, bool $force = false): DispatchResult
+    public function drain($all = false, $force = false): DispatchResult
     {
         $result = new DispatchResult;
 
@@ -220,7 +257,7 @@ class Dispatcher implements Sender
         $unsent = $this->attempt($first, $result, $force);
 
         // If the first half hit a problem the breaker may be open now; the second half then simply waits too.
-        return [...$unsent, ...$this->attempt($second, $result, $force)];
+        return array_merge($unsent, $this->attempt($second, $result, $force));
     }
 
     /**

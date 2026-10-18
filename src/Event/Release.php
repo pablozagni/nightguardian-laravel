@@ -12,15 +12,37 @@ use Throwable;
  */
 class Release
 {
-    private ?string $resolved = null;
+    /**
+     * @var string|null
+     */
+    private $configured;
 
-    private bool $isResolved = false;
+    /**
+     * @var string
+     */
+    private $basePath;
 
-    public function __construct(
-        private ?string $configured,
-        private string $basePath,
-        private ?string $storagePath = null,
-    ) {}
+    /**
+     * @var string|null
+     */
+    private $storagePath;
+
+    /**
+     * @var string|null
+     */
+    private $resolved;
+
+    /**
+     * @var bool
+     */
+    private $isResolved = false;
+
+    public function __construct(?string $configured, string $basePath, ?string $storagePath = null)
+    {
+        $this->configured = $configured;
+        $this->basePath = $basePath;
+        $this->storagePath = $storagePath;
+    }
 
     public function resolve(): ?string
     {
@@ -56,7 +78,7 @@ class Release
             }
 
             $head = trim((string) @file_get_contents($gitDir.'/HEAD'));
-            $isRef = str_starts_with($head, 'ref:');
+            $isRef = strncmp($head, 'ref:', strlen('ref:')) === 0;
             $ref = $isRef ? trim(substr($head, 4)) : null;
 
             return [
@@ -86,7 +108,7 @@ class Release
         // The ref file path comes from HEAD, which is cheap to read; its mtime is part of the cache key.
         $headContents = trim((string) @file_get_contents($head));
 
-        if (str_starts_with($headContents, 'ref:')) {
+        if (strncmp($headContents, 'ref:', strlen('ref:')) === 0) {
             $refFile = $gitDir.'/'.trim(substr($headContents, 4));
             $stamp .= ':'.(string) @filemtime($refFile).':'.(string) @filemtime($gitDir.'/packed-refs');
         }
@@ -120,7 +142,7 @@ class Release
         $packed = @file($gitDir.'/packed-refs', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
         foreach ($packed ?: [] as $line) {
-            if ($line !== '' && $line[0] !== '#' && $line[0] !== '^' && str_ends_with($line, ' '.$ref)) {
+            if ($line !== '' && $line[0] !== '#' && $line[0] !== '^' && substr_compare($line, ' '.$ref, -strlen(' '.$ref)) === 0) {
                 $candidate = trim(substr($line, 0, 40));
 
                 return $this->isSha($candidate) ? $candidate : null;
@@ -142,7 +164,7 @@ class Release
         if (is_file($dotGit)) {
             $contents = trim((string) @file_get_contents($dotGit));
 
-            if (str_starts_with($contents, 'gitdir:')) {
+            if (strncmp($contents, 'gitdir:', strlen('gitdir:')) === 0) {
                 $path = trim(substr($contents, 7));
                 $absolute = preg_match('#^([a-zA-Z]:)?[/\\\\]#', $path) === 1;
                 $path = $absolute ? $path : dirname($dotGit).'/'.$path;

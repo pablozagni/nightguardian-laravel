@@ -31,7 +31,11 @@ final class ContextSanitizer
         return is_array($result) ? $result : [];
     }
 
-    private static function value(mixed $value, int $depth): mixed
+    /**
+     * @param  mixed  $value
+     * @return mixed
+     */
+    private static function value($value, int $depth)
     {
         if ($value === null || is_bool($value) || is_int($value)) {
             return $value;
@@ -50,7 +54,7 @@ final class ContextSanitizer
         }
 
         if ($depth >= self::MAX_DEPTH) {
-            return is_array($value) ? '[array]' : '[object '.$value::class.']';
+            return is_array($value) ? '[array]' : '[object '.get_class($value).']';
         }
 
         if (is_array($value)) {
@@ -74,7 +78,7 @@ final class ContextSanitizer
         }
 
         if ($value instanceof Throwable) {
-            return ['class' => $value::class, 'message' => self::value($value->getMessage(), $depth + 1)];
+            return ['class' => get_class($value), 'message' => self::value($value->getMessage(), $depth + 1)];
         }
 
         if ($value instanceof UnitEnum) {
@@ -89,10 +93,10 @@ final class ContextSanitizer
             try {
                 return self::value($value->jsonSerialize(), $depth + 1);
             } catch (Throwable $e) {
-                return '[object '.$value::class.']';
+                return '[object '.get_class($value).']';
             }
         }
 
-        return '[object '.$value::class.']';
+        return '[object '.get_class($value).']';
     }
 }

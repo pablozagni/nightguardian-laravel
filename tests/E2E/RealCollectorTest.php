@@ -25,4 +25,6 @@ it('delivers a test event to the collector named by NIGHTGUARDIAN_E2E_URL', func
     $result = (new CurlTransport($url, (string) getenv('NIGHTGUARDIAN_E2E_TOKEN'), 5.0, 2.0))->send([$event]);
 
     expect($result->status)->toBe(202)->and(NightGuardian::SDK_NAME)->toBe('nightguardian-laravel');
-})->skip(fn () => ! ngE2eEnabled(), 'Real-collector test: set NIGHTGUARDIAN_E2E=1, NIGHTGUARDIAN_E2E_URL and NIGHTGUARDIAN_E2E_TOKEN to run it.');
+})->skip(function () {
+    return ! ngE2eEnabled();
+}, 'Real-collector test: set NIGHTGUARDIAN_E2E=1, NIGHTGUARDIAN_E2E_URL and NIGHTGUARDIAN_E2E_TOKEN to run it.');

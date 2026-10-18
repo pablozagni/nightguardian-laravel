@@ -24,12 +24,15 @@ class StackTrace
 
     private const MAX_LINE_LENGTH = 250;
 
-    private const MAX_SOURCE_BYTES = 1_000_000;
+    private const MAX_SOURCE_BYTES = 1000000;
 
-    private string $basePath;
+    /**
+     * @var string
+     */
+    private $basePath;
 
     /** @var array<string, list<string>|null> */
-    private array $sourceCache = [];
+    private $sourceCache = [];
 
     public function __construct(string $basePath)
     {
@@ -39,15 +42,16 @@ class StackTrace
     /**
      * The throwable and its `previous` chain, ordered outermost to innermost.
      *
+     * @param  Throwable  $throwable
      * @return list<array<string, mixed>>
      */
-    public function chain(Throwable $throwable): array
+    public function chain($throwable): array
     {
         $chain = [];
         $seen = [];
 
         for ($current = $throwable; $current !== null && count($chain) < self::MAX_CHAIN; $current = $current->getPrevious()) {
-            $id = spl_object_id($current);
+            $id = spl_object_hash($current);
 
             if (isset($seen[$id])) {
                 break;
@@ -61,12 +65,13 @@ class StackTrace
     }
 
     /**
+     * @param  Throwable  $throwable
      * @return array<string, mixed>
      */
-    public function describe(Throwable $throwable): array
+    public function describe($throwable): array
     {
         $exception = [
-            'class' => mb_substr($throwable::class, 0, 255),
+            'class' => mb_substr(get_class($throwable), 0, 255),
             'message' => mb_substr($throwable->getMessage(), 0, self::MAX_MESSAGE),
         ];
 
@@ -82,9 +87,10 @@ class StackTrace
     }
 
     /**
+     * @param  Throwable  $throwable
      * @return list<array<string, mixed>>
      */
-    public function frames(Throwable $throwable): array
+    public function frames($throwable): array
     {
         $trace = $throwable->getTrace();
         $location = ['file' => $throwable->getFile(), 'line' => $throwable->getLine()];
@@ -104,8 +110,10 @@ class StackTrace
 
     /**
      * Relative path for files inside the project, absolute (forward slashes) otherwise.
+     *
+     * @param  string  $file
      */
-    public function relativePath(string $file): string
+    public function relativePath($file): string
     {
         $file = self::normalize($file);
 
@@ -116,7 +124,10 @@ class StackTrace
         return $file;
     }
 
-    public function isInApp(string $file): bool
+    /**
+     * @param  string  $file
+     */
+    public function isInApp($file): bool
     {
         $file = self::normalize($file);
 
@@ -126,10 +137,10 @@ class StackTrace
 
         $relative = ltrim(substr($file, strlen($this->basePath)), '/');
 
-        return ! str_starts_with($relative, 'vendor/')
-            && ! str_contains($relative, '/vendor/')
-            && ! str_starts_with($relative, 'node_modules/')
-            && ! str_contains($relative, '/node_modules/');
+        return strncmp($relative, 'vendor/', strlen('vendor/')) !== 0
+            && strpos($relative, '/vendor/') === false
+            && strncmp($relative, 'node_modules/', strlen('node_modules/')) !== 0
+            && strpos($relative, '/node_modules/') === false;
     }
 
     /**
@@ -177,7 +188,7 @@ class StackTrace
     {
         if (count($frames) > self::MAX_FRAMES) {
             $half = intdiv(self::MAX_FRAMES, 2);
-            $frames = [...array_slice($frames, 0, $half), ...array_slice($frames, -$half)];
+            $frames = array_merge(array_slice($frames, 0, $half), array_slice($frames, -$half));
         }
 
         $withContext = 0;
@@ -213,7 +224,9 @@ class StackTrace
         }
 
         $index = $line - 1;
-        $clip = static fn (string $text): string => mb_substr(rtrim($text, "\r\n"), 0, self::MAX_LINE_LENGTH);
+        $clip = static function (string $text): string {
+            return mb_substr(rtrim($text, "\r\n"), 0, self::MAX_LINE_LENGTH);
+        };
 
         return [
             'pre' => array_map($clip, array_slice($lines, max(0, $index - self::CONTEXT_LINES), min(self::CONTEXT_LINES, $index))),
@@ -263,7 +276,7 @@ class StackTrace
             return stripos($normalizedFile, $prefix) === 0;
         }
 
-        return str_starts_with($normalizedFile, $prefix);
+        return strncmp($normalizedFile, $prefix, strlen($prefix)) === 0;
     }
 
     private static function normalize(string $path): string

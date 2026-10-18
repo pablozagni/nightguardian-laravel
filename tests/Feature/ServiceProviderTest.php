@@ -46,10 +46,7 @@ it('merges the default configuration', function () {
 });
 
 it('registers the publishable config', function () {
-    $paths = ServiceProvider::pathsToPublish(
-        NightGuardianServiceProvider::class,
-        'nightguardian-config',
-    );
+    $paths = ServiceProvider::pathsToPublish(NightGuardianServiceProvider::class, 'nightguardian-config');
 
     expect($paths)->not->toBeEmpty();
 });

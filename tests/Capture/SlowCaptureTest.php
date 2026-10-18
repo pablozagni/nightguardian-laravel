@@ -72,7 +72,7 @@ it('allows slow queries again after a flush', function () {
 
 function ngRunRequest(int $sleepMs, ?Request $request = null, int $queries = 0): void
 {
-    $request ??= Request::create('https://app.test/reports', 'GET');
+    $request = $request ?? Request::create('https://app.test/reports', 'GET');
     $middleware = app(SlowRequestMiddleware::class);
 
     $response = $middleware->handle($request, function () use ($sleepMs, $queries) {
@@ -89,7 +89,7 @@ function ngRunRequest(int $sleepMs, ?Request $request = null, int $queries = 0):
 }
 
 it('captures a slow request in terminate() with duration, queries and status', function () {
-    ngRunRequest(90, queries: 3);
+    ngRunRequest(90, null, 3);
 
     $events = ngCaptured();
 
@@ -120,8 +120,8 @@ it('does not capture slow requests when the threshold is 0', function () {
 });
 
 it('starts counting queries from zero on every request', function () {
-    ngRunRequest(0, queries: 4);
-    ngRunRequest(90, queries: 1);
+    ngRunRequest(0, null, 4);
+    ngRunRequest(90, null, 1);
 
     expect(ngCaptured('slow_request')[0]['payload']['queries'])->toBe(1);
 });

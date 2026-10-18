@@ -16,14 +16,30 @@ use Throwable;
 class UserContext
 {
     /**
-     * @param  (Closure(): mixed)|null  $guardUser  Returns the already-loaded authenticated user, if any.
-     * @param  (callable(): mixed)|null  $resolver  Config `user_resolver`: returns ['id' => ..., 'email' => ..., 'name' => ...].
+     * @var Closure|null
      */
-    public function __construct(
-        private ?Closure $guardUser,
-        private mixed $resolver,
-        private bool $sendEmail = false,
-    ) {}
+    private $guardUser;
+
+    /**
+     * @var callable|null
+     */
+    private $resolver;
+
+    /**
+     * @var bool
+     */
+    private $sendEmail = false;
+
+    /**
+     * @param  (Closure(): mixed)|null  $guardUser  Returns the already-loaded authenticated user, if any.
+     * @param  mixed  $resolver  Config `user_resolver`: returns ['id' => ..., 'email' => ..., 'name' => ...].
+     */
+    public function __construct(?Closure $guardUser, $resolver, bool $sendEmail = false)
+    {
+        $this->guardUser = $guardUser;
+        $this->resolver = $resolver;
+        $this->sendEmail = $sendEmail;
+    }
 
     /**
      * @return array{id: string, email?: string, name?: string}|null
@@ -39,15 +55,19 @@ class UserContext
         }
     }
 
-    private function fromGuard(): mixed
+    /**
+     * @return mixed
+     */
+    private function fromGuard()
     {
         return $this->guardUser === null ? null : ($this->guardUser)();
     }
 
     /**
+     * @param  mixed  $raw
      * @return array{id: string, email?: string, name?: string}|null
      */
-    private function normalize(mixed $raw): ?array
+    private function normalize($raw): ?array
     {
         if ($raw instanceof Authenticatable) {
             $raw = [

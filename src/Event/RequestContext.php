@@ -14,19 +14,38 @@ use Throwable;
  */
 class RequestContext
 {
+    /**
+     * @var Scrubber
+     */
+    private $scrubber;
+
+    /**
+     * @var bool
+     */
+    private $sendIp = false;
+
+    /**
+     * @var bool
+     */
+    private $sendBody = false;
+
     private const MAX_BODY_BYTES = 8192;
 
-    public function __construct(
-        private Scrubber $scrubber,
-        private bool $sendIp = false,
-        private bool $sendBody = false,
-    ) {}
+    public function __construct(Scrubber $scrubber, bool $sendIp = false, bool $sendBody = false)
+    {
+        $this->scrubber = $scrubber;
+        $this->sendIp = $sendIp;
+        $this->sendBody = $sendBody;
+    }
 
     /**
      * @param  list<string>  $headerAllowlist
+     * @param  Request|null  $request
+     * @param  int|null  $statusCode
+     * @param  int|null  $durationMs
      * @return array<string, mixed>|null
      */
-    public function describe(?Request $request, array $headerAllowlist, ?int $statusCode = null, ?int $durationMs = null): ?array
+    public function describe($request, $headerAllowlist, $statusCode = null, $durationMs = null): ?array
     {
         if ($request === null) {
             return null;
@@ -126,7 +145,7 @@ class RequestContext
 
         $input = $this->scrubber->scrub($input);
 
-        if (strlen((string) json_encode($input, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE)) > self::MAX_BODY_BYTES) {
+        if (strlen((string) json_encode($input, JSON_PARTIAL_OUTPUT_ON_ERROR)) > self::MAX_BODY_BYTES) {
             return ['_truncated' => true, 'keys' => array_slice(array_map('strval', array_keys($input)), 0, 50)];
         }
 

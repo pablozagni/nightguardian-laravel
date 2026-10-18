@@ -77,15 +77,29 @@ it('falls back to error for an invalid configured level', function () {
 });
 
 it('ignores exceptions on the ignore list and client-side HTTP errors', function (string $case) {
-    $exception = match ($case) {
-        'validation' => ValidationException::withMessages(['a' => 'b']),
-        'authentication' => new AuthenticationException,
-        'authorization' => new AuthorizationException,
-        'model not found' => new ModelNotFoundException,
-        'not found http' => new NotFoundHttpException,
-        'http 403' => new HttpException(403),
-        default => new HttpException(429),
-    };
+    switch ($case) {
+        case 'validation':
+            $exception = ValidationException::withMessages(['a' => 'b']);
+            break;
+        case 'authentication':
+            $exception = new AuthenticationException;
+            break;
+        case 'authorization':
+            $exception = new AuthorizationException;
+            break;
+        case 'model not found':
+            $exception = new ModelNotFoundException;
+            break;
+        case 'not found http':
+            $exception = new NotFoundHttpException;
+            break;
+        case 'http 403':
+            $exception = new HttpException(403);
+            break;
+        default:
+            $exception = new HttpException(429);
+            break;
+    }
 
     Log::error('x', ['exception' => $exception]);
 
@@ -131,7 +145,9 @@ it('makes log contexts JSON safe', function () {
     $resource = fopen('php://memory', 'r');
 
     Log::error('weird context', [
-        'closure' => fn () => 1,
+        'closure' => function () {
+            return 1;
+        },
         'object' => new stdClass,
         'resource' => $resource,
         'nested' => ['a' => ['b' => ['c' => ['d' => ['e' => ['f' => 'deep']]]]]],
@@ -167,7 +183,9 @@ it('accepts stringable and non-string log messages', function () {
 });
 
 it('captures exceptions that bubble out of a request, with the request attached', function () {
-    Route::get('/boom', fn () => throw new RuntimeException('Kaboom'));
+    Route::get('/boom', function () {
+        throw new RuntimeException('Kaboom');
+    });
 
     $this->get('/boom')->assertStatus(500);
 
@@ -214,7 +232,9 @@ it('reports messages with a level and context', function () {
 
 it('flushes the buffer to the sender in one batch and empties it', function () {
     $sender = new ArraySender;
-    app()->singleton(Client::class, fn ($app) => new Client(config('nightguardian'), $app->make(Buffer::class), $app->make(EventFactory::class), $sender));
+    app()->singleton(Client::class, function ($app) use ($sender) {
+        return new Client(config('nightguardian'), $app->make(Buffer::class), $app->make(EventFactory::class), $sender);
+    });
 
     NightGuardian::message('one');
     NightGuardian::message('two');
@@ -229,7 +249,10 @@ it('flushes the buffer to the sender in one batch and empties it', function () {
 it('never lets a failure escape to the application', function () {
     $broken = new class extends Buffer
     {
-        public function add(array $event): bool
+        /**
+         * @param  mixed[]  $event
+         */
+        public function add($event): bool
         {
             throw new RuntimeException('buffer exploded');
         }

@@ -34,20 +34,20 @@ class StatusCommand extends Command
         $this->newLine();
 
         $breaker = $dispatcher->breaker()->status();
-        $this->row('Circuit breaker', match ($breaker['state']) {
-            'open' => "OPEN for {$breaker['seconds_left']}s - {$breaker['reason']}",
-            'half-open' => 'half-open: the next request probes the collector'.($breaker['reason'] ? " (last: {$breaker['reason']})" : ''),
-            default => 'closed',
-        });
+        $this->row('Circuit breaker', (function () use ($breaker) {
+            switch ($breaker['state']) {
+                case 'open':
+                    return "OPEN for {$breaker['seconds_left']}s - {$breaker['reason']}";
+                case 'half-open':
+                    return 'half-open: the next request probes the collector'.($breaker['reason'] ? " (last: {$breaker['reason']})" : '');
+                default:
+                    return 'closed';
+            }
+        })());
 
         $spool = $dispatcher->spool();
         $age = $spool->oldestAge();
-        $this->row('Spool', sprintf(
-            '%d batch(es), %s%s',
-            $spool->count(),
-            $this->bytes($spool->bytes()),
-            $age !== null ? ", oldest {$this->age($age)} old" : '',
-        ));
+        $this->row('Spool', sprintf('%d batch(es), %s%s', $spool->count(), $this->bytes($spool->bytes()), $age !== null ? ", oldest {$this->age($age)} old" : ''));
         $this->row('Spool directory', $spool->directory().($spool->isWritable() ? '' : '  (NOT WRITABLE)'));
 
         $this->newLine();
@@ -83,8 +83,10 @@ class StatusCommand extends Command
 
     /**
      * Protocol v1 §1: SDKs must warn about plain http:// in production.
+     *
+     * @param  NightGuardian  $client
      */
-    public static function insecureUrlWarning(NightGuardian $client): ?string
+    public static function insecureUrlWarning($client): ?string
     {
         $config = $client->config();
         $url = (string) ($config['url'] ?? '');
@@ -102,7 +104,10 @@ class StatusCommand extends Command
         $this->line(sprintf('  %-22s %s', $label, $value));
     }
 
-    private function maskToken(mixed $token): string
+    /**
+     * @param  mixed  $token
+     */
+    private function maskToken($token): string
     {
         if (! is_string($token) || $token === '') {
             return '(not set)';
@@ -111,7 +116,10 @@ class StatusCommand extends Command
         return substr($token, 0, 3).str_repeat('*', 6).substr($token, -4);
     }
 
-    private function threshold(mixed $ms): string
+    /**
+     * @param  mixed  $ms
+     */
+    private function threshold($ms): string
     {
         return (int) $ms > 0 ? "{$ms} ms" : 'off';
     }
@@ -123,15 +131,22 @@ class StatusCommand extends Command
 
     private function age(int $seconds): string
     {
-        return match (true) {
-            $seconds >= 86400 => intdiv($seconds, 86400).' d',
-            $seconds >= 3600 => intdiv($seconds, 3600).' h',
-            $seconds >= 60 => intdiv($seconds, 60).' min',
-            default => $seconds.' s',
-        };
+        switch (true) {
+            case $seconds >= 86400:
+                return intdiv($seconds, 86400).' d';
+            case $seconds >= 3600:
+                return intdiv($seconds, 3600).' h';
+            case $seconds >= 60:
+                return intdiv($seconds, 60).' min';
+            default:
+                return $seconds.' s';
+        }
     }
 
-    private function time(mixed $timestamp): string
+    /**
+     * @param  mixed  $timestamp
+     */
+    private function time($timestamp): string
     {
         return is_numeric($timestamp) ? gmdate('Y-m-d H:i:s', (int) $timestamp).' UTC' : '-';
     }

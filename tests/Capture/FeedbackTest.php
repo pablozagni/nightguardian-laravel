@@ -15,7 +15,9 @@ use NightGuardian\Laravel\Transport\TransportResult;
 
 beforeEach(function () {
     config(['app.debug' => false]);
-    Route::get('/boom', fn () => throw new RuntimeException('Kaboom'));
+    Route::get('/boom', function () {
+        throw new RuntimeException('Kaboom');
+    });
 });
 
 /**
@@ -43,7 +45,9 @@ function ngPostFeedback($test, array $fields, string $comment = 'I was saving in
 
 function ngFeedbackEvents(): array
 {
-    return array_values(array_filter(app(Transport::class)->events(), fn (array $e) => $e['type'] === 'feedback'));
+    return array_values(array_filter(app(Transport::class)->events(), function (array $e) {
+        return $e['type'] === 'feedback';
+    }));
 }
 
 // --- the happy path ---------------------------------------------------------------------------------------
@@ -132,14 +136,9 @@ it('admits it when the message could be neither sent nor stored', function () {
     $blocker = tempnam(sys_get_temp_dir(), 'ngfile');
     $clock = app(Clock::class);
 
-    app()->singleton(Dispatcher::class, fn () => new Dispatcher(
-        app(Transport::class),
-        new Spool($blocker.'/spool', 1048576, 7, $clock),
-        new CircuitBreaker($blocker.'/b.json', $clock),
-        new Stats($blocker.'/s.json'),
-        $clock,
-        $blocker.'/l',
-    ));
+    app()->singleton(Dispatcher::class, function () use ($blocker, $clock) {
+        return new Dispatcher(app(Transport::class), new Spool($blocker.'/spool', 1048576, 7, $clock), new CircuitBreaker($blocker.'/b.json', $clock), new Stats($blocker.'/s.json'), $clock, $blocker.'/l');
+    });
     app(Transport::class)->script[] = new TransportResult(503, 'HTTP 503');
 
     $response = ngPostFeedback($this, $fields);
@@ -243,7 +242,10 @@ it('never lets an internal failure escape as an exception page', function () {
     $fields = ngFormFields($this);
     $this->app->instance(Transport::class, new class extends FakeTransport
     {
-        public function send(array $events): TransportResult
+        /**
+         * @param  mixed[]  $events
+         */
+        public function send($events): TransportResult
         {
             throw new RuntimeException('transport exploded');
         }

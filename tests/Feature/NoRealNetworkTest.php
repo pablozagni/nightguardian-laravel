@@ -23,10 +23,9 @@ it('finds no real collector configuration in the environment unless E2E is expli
         $this->markTestSkipped('NIGHTGUARDIAN_E2E=1: real-collector tests were requested explicitly.');
     }
 
-    $found = array_values(array_filter(
-        ['NIGHTGUARDIAN_URL', 'NIGHTGUARDIAN_TOKEN', 'NIGHTGUARDIAN_E2E_URL', 'NIGHTGUARDIAN_E2E_TOKEN'],
-        fn (string $name) => ngEnvValue($name) !== '',
-    ));
+    $found = array_values(array_filter(['NIGHTGUARDIAN_URL', 'NIGHTGUARDIAN_TOKEN', 'NIGHTGUARDIAN_E2E_URL', 'NIGHTGUARDIAN_E2E_TOKEN'], function (string $name) {
+        return ngEnvValue($name) !== '';
+    }));
 
     expect($found)->toBe([], implode(', ', $found).' is set. The suite must not see a real collector: unset it, '
         .'or set NIGHTGUARDIAN_E2E=1 to run tests/E2E on purpose.');
@@ -66,7 +65,7 @@ it('only lets the suite open sockets to loopback addresses', function () {
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__), FilesystemIterator::SKIP_DOTS)) as $file) {
         $path = $file->getPathname();
 
-        if (! str_ends_with($path, '.php') || str_contains($path, DIRECTORY_SEPARATOR.'E2E'.DIRECTORY_SEPARATOR) || basename($path) === 'NoRealNetworkTest.php') {
+        if (substr_compare($path, '.php', -strlen('.php')) !== 0 || strpos($path, DIRECTORY_SEPARATOR.'E2E'.DIRECTORY_SEPARATOR) !== false || basename($path) === 'NoRealNetworkTest.php') {
             continue;
         }
 

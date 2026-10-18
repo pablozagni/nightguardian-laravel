@@ -8,8 +8,8 @@ use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 use NightGuardian\Laravel\NightGuardian;
 use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Support\ObjectMap;
 use Throwable;
-use WeakMap;
 
 /**
  * Scheduled tasks that throw (`ScheduledTaskFailed`) or finish with a non-zero exit code.
@@ -17,24 +17,36 @@ use WeakMap;
  */
 class ScheduleListener
 {
+    /**
+     * @var NightGuardian
+     */
+    private $client;
+
     private const OUTPUT_TAIL_BYTES = 2048;
 
-    /** @var WeakMap<ScheduledEvent, true> */
-    private WeakMap $reported;
+    /** @var ObjectMap */
+    private $reported;
 
-    public function __construct(private NightGuardian $client)
+    public function __construct(NightGuardian $client)
     {
-        $this->reported = new WeakMap;
+        $this->client = $client;
+        $this->reported = new ObjectMap;
     }
 
-    public function starting(ScheduledTaskStarting $event): void
+    /**
+     * @param  ScheduledTaskStarting  $event
+     */
+    public function starting($event): void
     {
         Guard::run(function () use ($event) {
             unset($this->reported[$event->task]);
         });
     }
 
-    public function failed(ScheduledTaskFailed $event): void
+    /**
+     * @param  ScheduledTaskFailed  $event
+     */
+    public function failed($event): void
     {
         Guard::run(function () use ($event) {
             if (isset($this->reported[$event->task])) {
@@ -46,7 +58,10 @@ class ScheduleListener
         });
     }
 
-    public function finished(ScheduledTaskFinished $event): void
+    /**
+     * @param  ScheduledTaskFinished  $event
+     */
+    public function finished($event): void
     {
         Guard::run(function () use ($event) {
             $exitCode = $event->task->exitCode ?? null;
@@ -72,13 +87,7 @@ class ScheduleListener
 
         $exitCode = $task->exitCode ?? null;
 
-        $this->client->push($this->client->factory()->scheduleFailed(
-            $this->describe($task),
-            $task->expression !== '' ? $task->expression : null,
-            is_int($exitCode) ? $exitCode : null,
-            $this->outputTail($task),
-            $exception,
-        ));
+        $this->client->push($this->client->factory()->scheduleFailed($this->describe($task), $task->expression !== '' ? $task->expression : null, is_int($exitCode) ? $exitCode : null, $this->outputTail($task), $exception));
     }
 
     private function describe(ScheduledEvent $task): string
@@ -86,7 +95,7 @@ class ScheduleListener
         $summary = (string) $task->getSummaryForDisplay();
 
         if ($summary === '') {
-            $summary = (string) ($task->command ?? $task->description ?? 'scheduled task');
+            $summary = (string) ($task->command ?: ($task->description ?: 'scheduled task'));
         }
 
         // Commands are stored as "'/usr/bin/php' 'artisan' name": show them like a person would type them.

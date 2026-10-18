@@ -60,13 +60,9 @@ class NightGuardianServiceProvider extends ServiceProvider
         $this->app->singleton(RequestStats::class);
         $this->app->singleton(ScheduleListener::class);
 
-        $this->app->singleton(NightGuardian::class, fn (Application $app) => new NightGuardian(
-            $this->config($app),
-            $app->make(Buffer::class),
-            $app->make(EventFactory::class),
-            $app->make(Dispatcher::class),
-            $app->make(RequestStats::class),
-        ));
+        $this->app->singleton(NightGuardian::class, function (Application $app) {
+            return new NightGuardian($this->config($app), $app->make(Buffer::class), $app->make(EventFactory::class), $app->make(Dispatcher::class), $app->make(RequestStats::class));
+        });
 
         $this->app->singleton(FeedbackSigner::class, function (Application $app) {
             $key = $app['config']->get('app.key');
@@ -82,27 +78,20 @@ class NightGuardianServiceProvider extends ServiceProvider
             return new Scrubber(is_array($extra) ? array_values(array_filter($extra, 'is_string')) : []);
         });
 
-        $this->app->singleton(StackTrace::class, fn (Application $app) => new StackTrace($app->basePath()));
+        $this->app->singleton(StackTrace::class, function (Application $app) {
+            return new StackTrace($app->basePath());
+        });
 
         $this->app->singleton(Release::class, function (Application $app) {
             $configured = $this->config($app)['release'] ?? null;
 
-            return new Release(is_string($configured) ? $configured : null, $app->basePath(), $app->storagePath('nightguardian'));
+            return new Release(is_string($configured) ? $configured : null, $app->basePath(), $app->storagePath().DIRECTORY_SEPARATOR.'nightguardian');
         });
 
         $this->app->singleton(EventFactory::class, function (Application $app) {
             $config = $this->config($app);
 
-            return new EventFactory(
-                $config,
-                $app->make(Scrubber::class),
-                $app->make(StackTrace::class),
-                new RequestContext($app->make(Scrubber::class), (bool) ($config['send_ip'] ?? false), (bool) ($config['send_request_body'] ?? false)),
-                new UserContext($this->guardUser($app), $config['user_resolver'] ?? null, (bool) ($config['send_user_email'] ?? false)),
-                new RuntimeContext($app->version()),
-                $app->make(Release::class),
-                $this->currentRequest($app),
-            );
+            return new EventFactory($config, $app->make(Scrubber::class), $app->make(StackTrace::class), new RequestContext($app->make(Scrubber::class), (bool) ($config['send_ip'] ?? false), (bool) ($config['send_request_body'] ?? false)), new UserContext($this->guardUser($app), $config['user_resolver'] ?? null, (bool) ($config['send_user_email'] ?? false)), new RuntimeContext($app->version()), $app->make(Release::class), $this->currentRequest($app));
         });
     }
 
@@ -114,32 +103,15 @@ class NightGuardianServiceProvider extends ServiceProvider
             $config = $this->config($app);
             $url = (new NightGuardian($config))->ingestUrl();
 
-            return new CurlTransport(
-                $url ?? '',
-                is_string($config['token'] ?? null) ? trim($config['token']) : '',
-                (float) ($config['timeout'] ?? 2),
-                (float) ($config['connect_timeout'] ?? 1),
-            );
+            return new CurlTransport($url ?? '', is_string($config['token'] ?? null) ? trim($config['token']) : '', (float) ($config['timeout'] ?? 2), (float) ($config['connect_timeout'] ?? 1));
         });
 
         $this->app->singleton(Dispatcher::class, function (Application $app) {
             $config = $this->config($app);
-            $directory = $app->storagePath('nightguardian');
+            $directory = $app->storagePath().DIRECTORY_SEPARATOR.'nightguardian';
             $clock = $app->make(Clock::class);
 
-            return new Dispatcher(
-                $app->make(Transport::class),
-                new Spool(
-                    $directory.'/spool',
-                    max(0, (int) ($config['spool_max_mb'] ?? 10)) * 1048576,
-                    (int) ($config['spool_max_age_days'] ?? 7),
-                    $clock,
-                ),
-                new CircuitBreaker($directory.'/breaker.json', $clock),
-                new Stats($directory.'/stats.json'),
-                $clock,
-                $directory.'/drain.lock',
-            );
+            return new Dispatcher($app->make(Transport::class), new Spool($directory.'/spool', max(0, (int) ($config['spool_max_mb'] ?? 10)) * 1048576, (int) ($config['spool_max_age_days'] ?? 7), $clock), new CircuitBreaker($directory.'/breaker.json', $clock), new Stats($directory.'/stats.json'), $clock, $directory.'/drain.lock');
         });
     }
 
@@ -154,7 +126,7 @@ class NightGuardianServiceProvider extends ServiceProvider
             ], 'nightguardian-views');
 
             $this->publishes([
-                __DIR__.'/../resources/lang' => $this->app->langPath('vendor/nightguardian'),
+                __DIR__.'/../resources/lang' => $this->app->resourcePath('lang/vendor/nightguardian'),
             ], 'nightguardian-lang');
 
             $this->publishes([
@@ -209,12 +181,18 @@ class NightGuardianServiceProvider extends ServiceProvider
      */
     private function registerFlushPoints($events): void
     {
-        $flush = fn () => $this->app->make(NightGuardian::class)->flush();
+        $flush = function () {
+            return $this->app->make(NightGuardian::class)->flush();
+        };
 
-        $this->app->terminating($flush);
+        /** @var \Illuminate\Foundation\Application $application */
+        $application = $this->app;
+        $application->terminating($flush);
 
         foreach ([JobProcessed::class, JobFailed::class, JobExceptionOccurred::class, CommandFinished::class, ScheduledTaskFinished::class, ScheduledTaskFailed::class] as $event) {
-            $events->listen($event, static fn () => $flush());
+            $events->listen($event, static function () use ($flush) {
+                return $flush();
+            });
         }
 
         static $shutdownRegistered = false;
@@ -245,13 +223,7 @@ class NightGuardianServiceProvider extends ServiceProvider
                 return $handler;
             }
 
-            return new ExceptionHandlerDecorator(
-                $handler,
-                $app->make(NightGuardian::class),
-                $app->make(ViewFactory::class),
-                $app->make(FeedbackSigner::class),
-                $app->make(ConfigRepository::class),
-            );
+            return new ExceptionHandlerDecorator($handler, $app->make(NightGuardian::class), $app->make(ViewFactory::class), $app->make(FeedbackSigner::class), $app->make(ConfigRepository::class));
         });
 
         if ((bool) ($this->config($this->app)['feedback'] ?? true)) {
@@ -308,11 +280,12 @@ class NightGuardianServiceProvider extends ServiceProvider
      */
     private function guardUser(Application $app): Closure
     {
-        return static function () use ($app): mixed {
+        return static function () use ($app) {
             if (! $app->bound('auth')) {
                 return null;
             }
 
+            /** @var \Illuminate\Contracts\Auth\Guard $guard */
             $guard = $app->make('auth')->guard();
 
             return method_exists($guard, 'hasUser') && $guard->hasUser() ? $guard->user() : null;

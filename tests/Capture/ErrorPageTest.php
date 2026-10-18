@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\View\Factory as ViewFactory;
+use Illuminate\Foundation\Exceptions\Handler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -21,10 +22,18 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 beforeEach(function () {
     config(['app.debug' => false]);
 
-    Route::get('/boom', fn () => throw new RuntimeException('Kaboom'));
-    Route::get('/teapot', fn () => throw new HttpException(418, 'short and stout'));
-    Route::get('/gone', fn () => throw new HttpException(503, 'maintenance'));
-    Route::get('/fine', fn () => 'all good');
+    Route::get('/boom', function () {
+        throw new RuntimeException('Kaboom');
+    });
+    Route::get('/teapot', function () {
+        throw new HttpException(418, 'short and stout');
+    });
+    Route::get('/gone', function () {
+        throw new HttpException(503, 'maintenance');
+    });
+    Route::get('/fine', function () {
+        return 'all good';
+    });
 });
 
 function ngTransportFake(): FakeTransport
@@ -157,7 +166,14 @@ it('is installed around the application handler and proxies everything else', fu
         ->and($handler->shouldReport(new RuntimeException('x')))->toBeTrue()
         ->and($handler->shouldReport(new HttpException(404)))->toBeFalse();
 
-    // Methods that only exist on the framework's handler still work through __call.
+    // Methods that only exist on the framework's handler still work through __call
+    // (`ignore()` is public from Laravel 9; on older versions it is protected and nobody can call it from outside).
+    if (! is_callable([$handler->original(), 'ignore'])) {
+        expect($handler->original())->toBeInstanceOf(Handler::class);
+
+        return;
+    }
+
     $handler->ignore(DomainException::class);
 
     expect($handler->shouldReport(new DomainException('x')))->toBeFalse();
@@ -171,20 +187,28 @@ it('is not installed twice', function () {
 
 function ngDecorator(ExceptionHandler $inner, ?ViewFactory $views = null): ExceptionHandlerDecorator
 {
-    return new ExceptionHandlerDecorator(
-        $inner,
-        app(Client::class),
-        $views ?? app(ViewFactory::class),
-        app(FeedbackSigner::class),
-        app('config'),
-    );
+    return new ExceptionHandlerDecorator($inner, app(Client::class), $views ?? app(ViewFactory::class), app(FeedbackSigner::class), app('config'));
 }
 
-function ngInnerHandler(Response|JsonResponse $response): ExceptionHandler
+/**
+ * @param  Response|JsonResponse  $response
+ */
+function ngInnerHandler($response): ExceptionHandler
 {
     return new class($response) implements ExceptionHandler
     {
-        public function __construct(private mixed $response) {}
+        /**
+         * @var mixed
+         */
+        private $response;
+
+        /**
+         * @param  mixed  $response
+         */
+        public function __construct($response)
+        {
+            $this->response = $response;
+        }
 
         public function report(Throwable $e): void {}
 

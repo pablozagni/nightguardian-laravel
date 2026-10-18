@@ -30,7 +30,7 @@ class FlushCommand extends Command
             return self::SUCCESS;
         }
 
-        $result = $dispatcher->drain(all: true, force: true);
+        $result = $dispatcher->drain(true, true);
         $remaining = $dispatcher->spool()->count();
 
         $this->line("Sent {$result->drained} of {$before} spooled batch(es) ({$result->delivered} event(s) delivered, {$result->rejected} rejected).");

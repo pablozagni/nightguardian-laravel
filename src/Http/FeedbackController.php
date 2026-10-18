@@ -23,17 +23,43 @@ use Throwable;
  */
 class FeedbackController
 {
+    /**
+     * @var NightGuardian
+     */
+    private $client;
+
+    /**
+     * @var Dispatcher
+     */
+    private $dispatcher;
+
+    /**
+     * @var FeedbackSigner
+     */
+    private $signer;
+
+    /**
+     * @var CacheFactory
+     */
+    private $cache;
+
+    /**
+     * @var Config
+     */
+    private $config;
+
     public const MAX_COMMENT = 2000;
 
     private const LIMIT_PER_MINUTE = 5;
 
-    public function __construct(
-        private NightGuardian $client,
-        private Dispatcher $dispatcher,
-        private FeedbackSigner $signer,
-        private CacheFactory $cache,
-        private Config $config,
-    ) {}
+    public function __construct(NightGuardian $client, Dispatcher $dispatcher, FeedbackSigner $signer, CacheFactory $cache, Config $config)
+    {
+        $this->client = $client;
+        $this->dispatcher = $dispatcher;
+        $this->signer = $signer;
+        $this->cache = $cache;
+        $this->config = $config;
+    }
 
     public function store(Request $request): Response
     {

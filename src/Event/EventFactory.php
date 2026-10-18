@@ -23,6 +23,51 @@ use Throwable;
  */
 class EventFactory
 {
+    /**
+     * @var array<string, mixed>
+     */
+    private $config;
+
+    /**
+     * @var Scrubber
+     */
+    private $scrubber;
+
+    /**
+     * @var StackTrace
+     */
+    private $stackTrace;
+
+    /**
+     * @var RequestContext
+     */
+    private $requestContext;
+
+    /**
+     * @var UserContext
+     */
+    private $userContext;
+
+    /**
+     * @var RuntimeContext
+     */
+    private $runtimeContext;
+
+    /**
+     * @var Release
+     */
+    private $release;
+
+    /**
+     * @var Closure():?Request|null
+     */
+    private $currentRequest;
+
+    /**
+     * @var Closure():DateTimeInterface|null
+     */
+    private $clock;
+
     public const LEVELS = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
 
     public const MAX_EVENT_BYTES = 256 * 1024;
@@ -40,25 +85,27 @@ class EventFactory
      * @param  (Closure(): ?Request)|null  $currentRequest  Returns the HTTP request being served, or null (console).
      * @param  (Closure(): DateTimeInterface)|null  $clock
      */
-    public function __construct(
-        private array $config,
-        private Scrubber $scrubber,
-        private StackTrace $stackTrace,
-        private RequestContext $requestContext,
-        private UserContext $userContext,
-        private RuntimeContext $runtimeContext,
-        private Release $release,
-        private ?Closure $currentRequest = null,
-        private ?Closure $clock = null,
-    ) {}
+    public function __construct(array $config, Scrubber $scrubber, StackTrace $stackTrace, RequestContext $requestContext, UserContext $userContext, RuntimeContext $runtimeContext, Release $release, ?Closure $currentRequest = null, ?Closure $clock = null)
+    {
+        $this->config = $config;
+        $this->scrubber = $scrubber;
+        $this->stackTrace = $stackTrace;
+        $this->requestContext = $requestContext;
+        $this->userContext = $userContext;
+        $this->runtimeContext = $runtimeContext;
+        $this->release = $release;
+        $this->currentRequest = $currentRequest;
+        $this->clock = $clock;
+    }
 
     /**
      * @param  array<string, mixed>  $options  Extra: handled (bool, default false).
+     * @param  Throwable  $throwable
      * @return array<string, mixed>
      */
-    public function exception(Throwable $throwable, array $options = []): array
+    public function exception($throwable, $options = []): array
     {
-        $options['reference'] ??= Reference::generate();
+        $options['reference'] = $options['reference'] ?? Reference::generate();
 
         return $this->make('exception', [
             'exceptions' => $this->stackTrace->chain($throwable),
@@ -70,11 +117,12 @@ class EventFactory
      * A manual or automatic connectivity test: same payload as an exception, never alerts.
      *
      * @param  array<string, mixed>  $options
+     * @param  Throwable  $throwable
      * @return array<string, mixed>
      */
-    public function test(Throwable $throwable, array $options = []): array
+    public function test($throwable, $options = []): array
     {
-        $options['level'] ??= 'info';
+        $options['level'] = $options['level'] ?? 'info';
 
         return $this->make('test', [
             'exceptions' => $this->stackTrace->chain($throwable),
@@ -85,11 +133,15 @@ class EventFactory
     /**
      * @param  array<string, mixed>  $logContext  The PSR-3 context (without the exception).
      * @param  array<string, mixed>  $options
+     * @param  string  $level
+     * @param  string  $message
+     * @param  Throwable|null  $exception
+     * @param  string|null  $channel
      * @return array<string, mixed>
      */
-    public function log(string $level, string $message, array $logContext = [], ?Throwable $exception = null, ?string $channel = null, array $options = []): array
+    public function log($level, $message, $logContext = [], $exception = null, $channel = null, $options = []): array
     {
-        $options['level'] ??= $level;
+        $options['level'] = $options['level'] ?? $level;
 
         $payload = ['message' => $message];
 
@@ -104,7 +156,7 @@ class EventFactory
         $payload['exception'] = $exception !== null ? $this->stackTrace->describe($exception) : null;
 
         if ($exception !== null) {
-            $options['reference'] ??= Reference::generate();
+            $options['reference'] = $options['reference'] ?? Reference::generate();
         }
 
         return $this->make('log', $payload, $options);
@@ -112,9 +164,14 @@ class EventFactory
 
     /**
      * @param  array<string, mixed>  $options
+     * @param  string  $job
+     * @param  string|null  $queue
+     * @param  string|null  $connection
+     * @param  int  $attempts
+     * @param  Throwable  $exception
      * @return array<string, mixed>
      */
-    public function jobFailed(string $job, ?string $queue, ?string $connection, int $attempts, Throwable $exception, array $options = []): array
+    public function jobFailed($job, $queue, $connection, $attempts, $exception, $options = []): array
     {
         return $this->make('job_failed', array_filter([
             'job' => $job,
@@ -122,21 +179,30 @@ class EventFactory
             'connection' => $connection,
             'attempts' => $attempts,
             'exceptions' => $this->stackTrace->chain($exception),
-        ], static fn ($value) => $value !== null), $options);
+        ], static function ($value) {
+            return $value !== null;
+        }), $options);
     }
 
     /**
      * @param  array<string, mixed>  $options
+     * @param  string  $command
+     * @param  string|null  $expression
+     * @param  int|null  $exitCode
+     * @param  string|null  $output
+     * @param  Throwable|null  $exception
      * @return array<string, mixed>
      */
-    public function scheduleFailed(string $command, ?string $expression, ?int $exitCode, ?string $output, ?Throwable $exception, array $options = []): array
+    public function scheduleFailed($command, $expression, $exitCode, $output, $exception, $options = []): array
     {
         $payload = array_filter([
             'command' => $command,
             'expression' => $expression,
             'exit_code' => $exitCode,
             'output_tail' => $output !== null && $output !== '' ? mb_substr($output, -self::MAX_OUTPUT_TAIL) : null,
-        ], static fn ($value) => $value !== null);
+        ], static function ($value) {
+            return $value !== null;
+        });
 
         $payload['exceptions'] = $exception !== null ? $this->stackTrace->chain($exception) : [];
 
@@ -145,30 +211,39 @@ class EventFactory
 
     /**
      * @param  array<string, mixed>  $options
+     * @param  int  $durationMs
+     * @param  int  $thresholdMs
+     * @param  float|null  $memoryMb
+     * @param  int|null  $queries
      * @return array<string, mixed>
      */
-    public function slowRequest(int $durationMs, int $thresholdMs, ?float $memoryMb = null, ?int $queries = null, array $options = []): array
+    public function slowRequest($durationMs, $thresholdMs, $memoryMb = null, $queries = null, $options = []): array
     {
-        $options['level'] ??= 'warning';
-        $options['duration_ms'] ??= $durationMs;
+        $options['level'] = $options['level'] ?? 'warning';
+        $options['duration_ms'] = $options['duration_ms'] ?? $durationMs;
 
         return $this->make('slow_request', array_filter([
             'duration_ms' => $durationMs,
             'threshold_ms' => $thresholdMs,
             'memory_mb' => $memoryMb !== null ? round($memoryMb, 1) : null,
             'queries' => $queries,
-        ], static fn ($value) => $value !== null), $options);
+        ], static function ($value) {
+            return $value !== null;
+        }), $options);
     }
 
     /**
      * @param  string  $sql  Already normalized: bindings replaced by `?`.
      * @param  array{file: string, line: int}|null  $location
      * @param  array<string, mixed>  $options
+     * @param  float  $durationMs
+     * @param  int  $thresholdMs
+     * @param  string|null  $connection
      * @return array<string, mixed>
      */
-    public function slowQuery(string $sql, float $durationMs, int $thresholdMs, ?string $connection = null, ?array $location = null, array $options = []): array
+    public function slowQuery($sql, $durationMs, $thresholdMs, $connection = null, $location = null, $options = []): array
     {
-        $options['level'] ??= 'warning';
+        $options['level'] = $options['level'] ?? 'warning';
 
         if ($location !== null) {
             $location['file'] = $this->stackTrace->relativePath($location['file']);
@@ -180,47 +255,59 @@ class EventFactory
             'threshold_ms' => $thresholdMs,
             'connection' => $connection,
             'location' => $location,
-        ], static fn ($value) => $value !== null), $options);
+        ], static function ($value) {
+            return $value !== null;
+        }), $options);
     }
 
     /**
-     * @param  array{release?: ?string, commit?: ?string, branch?: ?string, deployer?: ?string, url?: ?string}  $info
+     * @param  mixed[]  $info
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
-    public function deploy(array $info, array $options = []): array
+    public function deploy($info, $options = []): array
     {
-        $payload = array_filter($info, static fn ($value) => is_string($value) && $value !== '');
+        $payload = array_filter($info, static function ($value) {
+            return is_string($value) && $value !== '';
+        });
 
         if (isset($payload['release'])) {
             $options['release'] = $payload['release'];
         }
 
-        return $this->make('deploy', $payload, $options, withLevel: false);
+        return $this->make('deploy', $payload, $options, false);
     }
 
     /**
      * @param  array<string, mixed>  $options
+     * @param  string  $eventId
+     * @param  string|null  $reference
+     * @param  string  $comment
+     * @param  string|null  $email
      * @return array<string, mixed>
      */
-    public function feedback(string $eventId, ?string $reference, string $comment, ?string $email = null, array $options = []): array
+    public function feedback($eventId, $reference, $comment, $email = null, $options = []): array
     {
-        $options['request'] ??= false;
+        $options['request'] = $options['request'] ?? false;
 
         return $this->make('feedback', array_filter([
             'event_id' => $eventId,
             'reference' => $reference,
             'comment' => mb_substr($comment, 0, self::MAX_COMMENT),
             'email' => $email,
-        ], static fn ($value) => $value !== null), $options, withLevel: false);
+        ], static function ($value) {
+            return $value !== null;
+        }), $options, false);
     }
 
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $options
+     * @param  string  $type
+     * @param  bool  $withLevel
      * @return array<string, mixed>
      */
-    public function make(string $type, array $payload, array $options = [], bool $withLevel = true): array
+    public function make($type, $payload, $options = [], $withLevel = true): array
     {
         $event = [
             'id' => Str::uuid()->toString(),
@@ -342,12 +429,7 @@ class EventFactory
 
         $allowlist = $this->config['header_allowlist'] ?? [];
 
-        return $this->requestContext->describe(
-            $request instanceof Request ? $request : null,
-            is_array($allowlist) ? array_values(array_filter($allowlist, 'is_string')) : [],
-            isset($options['status_code']) ? (int) $options['status_code'] : null,
-            isset($options['duration_ms']) ? (int) $options['duration_ms'] : null,
-        );
+        return $this->requestContext->describe($request instanceof Request ? $request : null, is_array($allowlist) ? array_values(array_filter($allowlist, 'is_string')) : [], isset($options['status_code']) ? (int) $options['status_code'] : null, isset($options['duration_ms']) ? (int) $options['duration_ms'] : null);
     }
 
     /**
@@ -390,7 +472,9 @@ class EventFactory
         foreach (['exceptions', 'exception'] as $key) {
             if (isset($event['payload'][$key]) && is_array($event['payload'][$key])) {
                 $event['payload'][$key] = $key === 'exceptions'
-                    ? array_map(fn (array $e) => $this->truncateFrames($e), $event['payload'][$key])
+                    ? array_map(function (array $e) {
+                        return $this->truncateFrames($e);
+                    }, $event['payload'][$key])
                     : $this->truncateFrames($event['payload'][$key]);
             }
         }
@@ -430,7 +514,7 @@ class EventFactory
     private function truncateFrames(array $exception): array
     {
         if (isset($exception['frames']) && is_array($exception['frames'])) {
-            $exception['frames'] = [...array_slice($exception['frames'], 0, 10), ...array_slice($exception['frames'], -5)];
+            $exception['frames'] = array_merge(array_slice($exception['frames'], 0, 10), array_slice($exception['frames'], -5));
         }
 
         if (isset($exception['message']) && is_string($exception['message'])) {
@@ -453,7 +537,10 @@ class EventFactory
         return ['_truncated' => true, 'keys' => array_slice(array_map('strval', array_keys($context)), 0, 50)];
     }
 
-    private function timestamp(mixed $given): string
+    /**
+     * @param  mixed  $given
+     */
+    private function timestamp($given): string
     {
         $time = $given instanceof DateTimeInterface
             ? $given
@@ -464,7 +551,10 @@ class EventFactory
             ->format('Y-m-d\TH:i:s.v\Z');
     }
 
-    private function level(mixed $level): string
+    /**
+     * @param  mixed  $level
+     */
+    private function level($level): string
     {
         $level = is_string($level) ? strtolower($level) : '';
 
@@ -472,9 +562,10 @@ class EventFactory
     }
 
     /**
+     * @param  mixed  $fingerprint
      * @return list<string>|null
      */
-    private function fingerprint(mixed $fingerprint): ?array
+    private function fingerprint($fingerprint): ?array
     {
         if (! is_array($fingerprint) || $fingerprint === []) {
             return null;
@@ -492,9 +583,10 @@ class EventFactory
     }
 
     /**
+     * @param  mixed  $extra
      * @return array<string, string>
      */
-    private function tags(mixed $extra): array
+    private function tags($extra): array
     {
         $configured = $this->config['tags'] ?? [];
         $tags = [];
@@ -520,7 +612,10 @@ class EventFactory
         return $tags;
     }
 
-    private function string(mixed $value): ?string
+    /**
+     * @param  mixed  $value
+     */
+    private function string($value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }

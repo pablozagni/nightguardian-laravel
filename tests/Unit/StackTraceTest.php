@@ -64,7 +64,9 @@ it('starts the frames at the throw site, most recent call first', function () {
 });
 
 it('maps each function to the line where its code was running', function () {
-    $exception = ngCapture(fn () => ngRecursive(2));
+    $exception = ngCapture(function () {
+        return ngRecursive(2);
+    });
     $frames = (new StackTrace(ngRoot()))->frames($exception);
 
     // throw site in ngRecursive(0), then the recursive calls, then the closure, then the test.
@@ -111,8 +113,12 @@ it('treats files outside the project as not in-app', function () {
 });
 
 it('marks vendor frames as not in-app and gives them no code context', function () {
-    $frames = (new StackTrace(ngRoot()))->frames(ngCapture(fn () => app()->make('does-not-exist-'.uniqid())));
-    $vendor = array_values(array_filter($frames, fn (array $f) => str_starts_with($f['file'], 'vendor/')));
+    $frames = (new StackTrace(ngRoot()))->frames(ngCapture(function () {
+        return app()->make('does-not-exist-'.uniqid());
+    }));
+    $vendor = array_values(array_filter($frames, function (array $f) {
+        return strncmp($f['file'], 'vendor/', strlen('vendor/')) === 0;
+    }));
 
     expect($vendor)->not->toBeEmpty();
 
@@ -166,14 +172,20 @@ it('keeps lines of the context short', function () {
 });
 
 it('limits code context to the first 30 in-app frames', function () {
-    $frames = (new StackTrace(ngRoot()))->frames(ngCapture(fn () => ngRecursive(60)));
-    $withContext = array_filter($frames, fn (array $f) => isset($f['context']));
+    $frames = (new StackTrace(ngRoot()))->frames(ngCapture(function () {
+        return ngRecursive(60);
+    }));
+    $withContext = array_filter($frames, function (array $f) {
+        return isset($f['context']);
+    });
 
     expect(count($frames))->toBeGreaterThan(60)->and(count($withContext))->toBe(30);
 });
 
 it('keeps the first 50 and last 50 frames of very deep stacks', function () {
-    $exception = ngCapture(fn () => ngRecursive(250));
+    $exception = ngCapture(function () {
+        return ngRecursive(250);
+    });
     $frames = (new StackTrace(ngRoot()))->frames($exception);
 
     expect($frames)->toHaveCount(100)
@@ -209,12 +221,16 @@ it('truncates huge messages', function () {
 });
 
 it('labels frames that come from internal functions', function () {
-    $exception = ngCapture(fn () => array_map(function () {
-        throw new Exception('in callback');
-    }, [1]));
+    $exception = ngCapture(function () {
+        return array_map(function () {
+            throw new Exception('in callback');
+        }, [1]);
+    });
 
     $frames = (new StackTrace(ngRoot()))->frames($exception);
-    $internal = array_values(array_filter($frames, fn (array $f) => ($f['function'] ?? null) === 'array_map'));
+    $internal = array_values(array_filter($frames, function (array $f) {
+        return ($f['function'] ?? null) === 'array_map';
+    }));
 
     expect($internal)->toHaveCount(1)
         ->and($internal[0]['file'])->toBe('[internal]')

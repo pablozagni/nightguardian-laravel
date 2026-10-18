@@ -3,8 +3,12 @@
          bootstrap="vendor/autoload.php"
          colors="true">
     <testsuites>
+        <testsuite name="Smoke">
+            <directory suffix="Test.php">./tests/Smoke</directory>
+        </testsuite>
         <testsuite name="NightGuardian">
             <directory suffix="Test.php">./tests</directory>
+            <exclude>./tests/Smoke</exclude>
         </testsuite>
     </testsuites>
     <php>

@@ -7,7 +7,9 @@ use NightGuardian\Laravel\Transport\Buffer;
 // --- Guard ------------------------------------------------------------------------------------------------
 
 it('returns the callback result', function () {
-    expect(Guard::run(fn () => 42))->toBe(42);
+    expect(Guard::run(function () {
+        return 42;
+    }))->toBe(42);
 });
 
 it('swallows exceptions, counts them and returns the default', function () {
@@ -21,7 +23,9 @@ it('swallows exceptions, counts them and returns the default', function () {
 });
 
 it('swallows errors too, not only exceptions', function () {
-    $result = Guard::run(fn () => intdiv(1, 0), 'safe');
+    $result = Guard::run(function () {
+        return intdiv(1, 0);
+    }, 'safe');
 
     expect($result)->toBe('safe')->and(Guard::errors())->toBe(1);
 });
@@ -43,7 +47,9 @@ it('is usable again after a failure', function () {
         throw new RuntimeException('x');
     });
 
-    expect(Guard::run(fn () => 'ok'))->toBe('ok');
+    expect(Guard::run(function () {
+        return 'ok';
+    }))->toBe('ok');
 });
 
 it('hands the error counters over once', function () {
@@ -58,28 +64,14 @@ it('hands the error counters over once', function () {
         ->and(Guard::errors())->toBe(0);
 });
 
-// --- ContextSanitizer --------------------------------------------------------------------------------------
-
-enum NgSuit: string
-{
-    case Hearts = 'h';
-}
-
-enum NgPlain
-{
-    case Spade;
-}
-
 it('keeps JSON friendly values', function () {
     $context = ['a' => 1, 'b' => 1.5, 'c' => true, 'd' => null, 'e' => 'text', 'list' => [1, 2, 3]];
 
     expect(ContextSanitizer::sanitize($context))->toBe($context);
 });
 
-it('converts objects, enums, throwables and non-finite numbers', function () {
+it('converts objects, throwables and non-finite numbers', function () {
     $result = ContextSanitizer::sanitize([
-        'enum' => NgSuit::Hearts,
-        'plain' => NgPlain::Spade,
         'exception' => new RuntimeException('boom'),
         'stringable' => new class
         {
@@ -99,13 +91,24 @@ it('converts objects, enums, throwables and non-finite numbers', function () {
         'object' => new stdClass,
     ]);
 
-    expect($result['enum'])->toBe('h')
-        ->and($result['plain'])->toBe('Spade')
-        ->and($result['exception'])->toBe(['class' => RuntimeException::class, 'message' => 'boom'])
+    expect($result['exception'])->toBe(['class' => RuntimeException::class, 'message' => 'boom'])
         ->and($result['stringable'])->toBe('as text')
         ->and($result['json'])->toBe(['x' => 1])
         ->and($result['inf'])->toBe('INF')
         ->and($result['object'])->toBe('[object stdClass]');
+});
+
+it('converts enums (PHP 8.1+)', function () {
+    if (PHP_VERSION_ID < 80100) {
+        $this->markTestSkipped('Enums need PHP 8.1.');
+    }
+
+    // Declared at run time so that this file still parses on PHP 7.x.
+    eval('enum NgSuit: string { case Hearts = "h"; } enum NgPlain { case Spade; }');
+
+    $result = ContextSanitizer::sanitize(['enum' => constant('NgSuit::Hearts'), 'plain' => constant('NgPlain::Spade')]);
+
+    expect($result['enum'])->toBe('h')->and($result['plain'])->toBe('Spade');
 });
 
 it('limits the number of items per array', function () {
@@ -117,7 +120,10 @@ it('limits the number of items per array', function () {
 it('survives a failing JsonSerializable', function () {
     $result = ContextSanitizer::sanitize(['bad' => new class implements JsonSerializable
     {
-        public function jsonSerialize(): mixed
+        /**
+         * @return mixed
+         */
+        public function jsonSerialize()
         {
             throw new RuntimeException('no');
         }

@@ -22,7 +22,7 @@ function ngServer(): array
     $command = [PHP_BINARY, '-S', "127.0.0.1:{$port}", __DIR__.'/../fixtures/ingest-server.php'];
     $env = array_merge(getenv(), ['NG_CAPTURE_FILE' => $capture, 'PHP_CLI_SERVER_WORKERS' => '4']);
 
-    $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['file', sys_get_temp_dir().'/ng-server.log', 'a'], 2 => ['file', sys_get_temp_dir().'/ng-server.log', 'a']], $pipes, null, $env);
+    $process = proc_open(is_array($command) ? implode(' ', array_map('escapeshellarg', $command)) : $command, [0 => ['pipe', 'r'], 1 => ['file', sys_get_temp_dir().'/ng-server.log', 'a'], 2 => ['file', sys_get_temp_dir().'/ng-server.log', 'a']], $pipes, null, $env);
 
     for ($i = 0; $i < 100; $i++) {
         $socket = @fsockopen('127.0.0.1', $port, $errno, $error, 0.1);
@@ -32,7 +32,7 @@ function ngServer(): array
             break;
         }
 
-        usleep(50_000);
+        usleep(50000);
     }
 
     register_shutdown_function(function () use ($process, $capture) {
@@ -50,12 +50,16 @@ function ngCurl(string $token, float $timeout = 2.0, ?string $url = null): CurlT
 
 function ngRequests(): array
 {
-    return array_map(fn (string $line) => json_decode($line, true), array_filter(explode("\n", (string) file_get_contents(ngServer()['capture']))));
+    return array_map(function (string $line) {
+        return json_decode($line, true);
+    }, array_filter(explode("\n", (string) file_get_contents(ngServer()['capture']))));
 }
 
 function ngRealEvents(int $count = 2): array
 {
-    return array_map(fn (int $i) => ['id' => "real{$i}", 'type' => 'log', 'level' => 'error', 'payload' => ['message' => "m{$i}"]], range(1, $count));
+    return array_map(function (int $i) {
+        return ['id' => "real{$i}", 'type' => 'log', 'level' => 'error', 'payload' => ['message' => "m{$i}"]];
+    }, range(1, $count));
 }
 
 it('posts a gzipped batch with the protocol headers and parses the per-event results', function () {
@@ -78,7 +82,9 @@ it('posts a gzipped batch with the protocol headers and parses the per-event res
 });
 
 it('actually compresses the body', function () {
-    ngCurl('ok')->send(array_map(fn ($i) => ['id' => "c{$i}", 'type' => 'log', 'payload' => ['message' => str_repeat('repeat ', 500)]], range(1, 20)));
+    ngCurl('ok')->send(array_map(function ($i) {
+        return ['id' => "c{$i}", 'type' => 'log', 'payload' => ['message' => str_repeat('repeat ', 500)]];
+    }, range(1, 20)));
 
     $request = ngLastRequest();
     $plain = strlen(json_encode($request['body']));
@@ -118,7 +124,7 @@ it('survives a 202 that is not the collector (HTML or oversized body)', function
 
 it('gives up after the total timeout without hanging the request', function () {
     $started = microtime(true);
-    $result = ngCurl('slow', timeout: 0.4)->send(ngRealEvents(1));
+    $result = ngCurl('slow', 0.4)->send(ngRealEvents(1));
     $elapsed = microtime(true) - $started;
 
     expect($result->status)->toBe(0)
@@ -132,7 +138,7 @@ it('reports a refused connection as a network failure', function () {
     fclose($probe);
 
     $started = microtime(true);
-    $result = ngCurl('ok', url: "http://127.0.0.1:{$port}/api/v1/ingest")->send(ngRealEvents(1));
+    $result = ngCurl('ok', 2.0, "http://127.0.0.1:{$port}/api/v1/ingest")->send(ngRealEvents(1));
 
     expect($result->status)->toBe(0)
         ->and($result->error)->toMatch('/curl error (7|28)/') // Windows reports a timeout instead of a refusal
@@ -154,6 +160,7 @@ it('encodes events containing invalid UTF-8 instead of failing', function () {
 function ngLastRequest(): array
 {
     $requests = ngRequests();
+    end($requests);
 
-    return $requests[array_key_last($requests)];
+    return $requests[key($requests)];
 }

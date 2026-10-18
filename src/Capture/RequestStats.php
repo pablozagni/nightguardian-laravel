@@ -9,9 +9,15 @@ class RequestStats
 {
     public const MAX_SLOW_QUERIES = 5;
 
-    private int $queries = 0;
+    /**
+     * @var int
+     */
+    private $queries = 0;
 
-    private int $slowQueries = 0;
+    /**
+     * @var int
+     */
+    private $slowQueries = 0;
 
     public function countQuery(): void
     {

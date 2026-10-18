@@ -7,12 +7,12 @@ use NightGuardian\Laravel\Capture\RequestStats;
 use NightGuardian\Laravel\Event\EventFactory;
 use NightGuardian\Laravel\Support\ContextSanitizer;
 use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Support\ObjectMap;
 use NightGuardian\Laravel\Transport\Buffer;
 use NightGuardian\Laravel\Transport\Sender;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
-use WeakMap;
 
 /**
  * Main client (facade root).
@@ -22,6 +22,31 @@ use WeakMap;
  */
 class NightGuardian
 {
+    /**
+     * @var array<string, mixed>
+     */
+    private $config;
+
+    /**
+     * @var Buffer|null
+     */
+    private $buffer;
+
+    /**
+     * @var EventFactory|null
+     */
+    private $factory;
+
+    /**
+     * @var Sender|null
+     */
+    private $sender;
+
+    /**
+     * @var RequestStats|null
+     */
+    private $stats;
+
     public const VERSION = '2.0.0-dev';
 
     public const SDK_NAME = 'nightguardian-laravel';
@@ -29,31 +54,34 @@ class NightGuardian
     /** PSR-3 levels from least to most severe. */
     private const LEVELS = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
 
-    private ?bool $active = null;
+    /**
+     * @var bool|null
+     */
+    private $active;
 
-    /** @var WeakMap<Throwable, true> */
-    private WeakMap $captured;
+    /** @var ObjectMap */
+    private $captured;
 
-    /** @var WeakMap<Throwable, array{reference: string, id: string}> */
-    private WeakMap $references;
+    /** @var ObjectMap */
+    private $references;
 
     /**
      * @param  array<string, mixed>  $config
      */
-    public function __construct(
-        private array $config,
-        private ?Buffer $buffer = null,
-        private ?EventFactory $factory = null,
-        private ?Sender $sender = null,
-        private ?RequestStats $stats = null,
-    ) {
-        $this->captured = new WeakMap;
-        $this->references = new WeakMap;
+    public function __construct(array $config, ?Buffer $buffer = null, ?EventFactory $factory = null, ?Sender $sender = null, ?RequestStats $stats = null)
+    {
+        $this->config = $config;
+        $this->buffer = $buffer;
+        $this->factory = $factory;
+        $this->sender = $sender;
+        $this->stats = $stats;
+        $this->captured = new ObjectMap;
+        $this->references = new ObjectMap;
     }
 
     public function isActive(): bool
     {
-        return $this->active ??= $this->inactiveReason() === null;
+        return $this->active = $this->active ?? $this->inactiveReason() === null;
     }
 
     /**
@@ -67,7 +95,7 @@ class NightGuardian
     /**
      * @param  array<string, mixed>  $config
      */
-    public static function inactiveReasonFor(array $config): ?string
+    public static function inactiveReasonFor($config): ?string
     {
         try {
             if (! extension_loaded('curl')) {
@@ -130,25 +158,31 @@ class NightGuardian
     }
 
     // --- public API ------------------------------------------------------------------------------
-
     /**
      * Reports a handled exception.
      *
      * @param  array<string, mixed>  $context  Free-form data shown with the event.
+     * @param  Throwable  $throwable
      */
-    public function report(Throwable $throwable, array $context = []): void
+    public function report($throwable, $context = []): void
     {
-        Guard::run(fn () => $this->captureThrowable($throwable, 'error', $context, handled: true, respectIgnoreList: false));
+        Guard::run(function () use ($throwable, $context) {
+            $this->captureThrowable($throwable, 'error', $context, true, false);
+        });
     }
 
     /**
      * Reports a message as a log event.
      *
      * @param  array<string, mixed>  $context
+     * @param  string  $message
+     * @param  string  $level
      */
-    public function message(string $message, string $level = 'error', array $context = []): void
+    public function message($message, $level = 'error', $context = []): void
     {
-        Guard::run(fn () => $this->captureLog($level, $message, $context));
+        Guard::run(function () use ($level, $message, $context) {
+            $this->captureLog($level, $message, $context);
+        });
     }
 
     /**
@@ -157,7 +191,7 @@ class NightGuardian
     public function flush(): void
     {
         Guard::run(function () {
-            $this->stats?->reset();
+            ($nullsafeVariable1 = $this->stats) ? $nullsafeVariable1->reset() : null;
 
             if ($this->buffer === null || $this->buffer->isEmpty()) {
                 return;
@@ -165,16 +199,19 @@ class NightGuardian
 
             $events = $this->buffer->drain();
 
-            $this->sender?->dispatch($events);
+            ($nullsafeVariable2 = $this->sender) ? $nullsafeVariable2->dispatch($events) : null;
         });
     }
 
     // --- used by the capture listeners ----------------------------------------------------------
-
     /**
      * @param  array<string, mixed>  $context
+     * @param  Throwable  $throwable
+     * @param  string  $level
+     * @param  bool  $handled
+     * @param  bool  $respectIgnoreList
      */
-    public function captureThrowable(Throwable $throwable, string $level, array $context = [], bool $handled = false, bool $respectIgnoreList = true): void
+    public function captureThrowable($throwable, $level, $context = [], $handled = false, $respectIgnoreList = true): void
     {
         if (! $this->canCapture() || $this->alreadyCaptured($throwable)) {
             return;
@@ -203,17 +240,21 @@ class NightGuardian
      * Reference code and event id of the event captured for this very exception instance, if any.
      * Used by the error page to show the code of the error the user is looking at.
      *
+     * @param  Throwable  $throwable
      * @return array{reference: string, id: string}|null
      */
-    public function referenceFor(Throwable $throwable): ?array
+    public function referenceFor($throwable): ?array
     {
         return $this->references[$throwable] ?? null;
     }
 
     /**
      * @param  array<string, mixed>  $context  PSR-3 context (an `exception` entry is ignored here).
+     * @param  string  $level
+     * @param  string  $message
+     * @param  Throwable|null  $exception
      */
-    public function captureLog(string $level, string $message, array $context = [], ?Throwable $exception = null): void
+    public function captureLog($level, $message, $context = [], $exception = null): void
     {
         if (! $this->canCapture()) {
             return;
@@ -227,14 +268,18 @@ class NightGuardian
     /**
      * @param  array<string, mixed>  $event  A complete protocol event built by the EventFactory.
      */
-    public function push(array $event): void
+    public function push($event): void
     {
-        $this->buffer?->add($event);
+        ($nullsafeVariable3 = $this->buffer) ? $nullsafeVariable3->add($event) : null;
     }
 
     public function factory(): EventFactory
     {
-        return $this->factory ?? throw new LogicException('The event factory is not available.');
+        if (! isset($this->factory)) {
+            throw new LogicException('The event factory is not available.');
+        }
+
+        return $this->factory;
     }
 
     public function canCapture(): bool
@@ -244,8 +289,10 @@ class NightGuardian
 
     /**
      * Marks the throwable as captured; true when it already was (one event per exception instance).
+     *
+     * @param  Throwable  $throwable
      */
-    public function alreadyCaptured(Throwable $throwable): bool
+    public function alreadyCaptured($throwable): bool
     {
         if (isset($this->captured[$throwable])) {
             return true;
@@ -256,7 +303,10 @@ class NightGuardian
         return false;
     }
 
-    public function meetsLogLevel(string $level): bool
+    /**
+     * @param  string  $level
+     */
+    public function meetsLogLevel($level): bool
     {
         $threshold = array_search(strtolower((string) ($this->config['log_level'] ?? 'error')), self::LEVELS, true);
         $actual = array_search(strtolower($level), self::LEVELS, true);
@@ -264,7 +314,10 @@ class NightGuardian
         return $actual !== false && $actual >= ($threshold === false ? 4 : $threshold);
     }
 
-    public function isIgnored(Throwable $throwable): bool
+    /**
+     * @param  Throwable  $throwable
+     */
+    public function isIgnored($throwable): bool
     {
         if ($throwable instanceof HttpExceptionInterface && $throwable->getStatusCode() < 500) {
             return true;

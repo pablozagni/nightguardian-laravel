@@ -14,13 +14,32 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class SlowRequestMiddleware
 {
+    /**
+     * @var NightGuardian
+     */
+    private $client;
+
+    /**
+     * @var RequestStats
+     */
+    private $stats;
+
     private const START = 'nightguardian.started_at';
 
     private const DURATION = 'nightguardian.duration_ms';
 
-    public function __construct(private NightGuardian $client, private RequestStats $stats) {}
+    public function __construct(NightGuardian $client, RequestStats $stats)
+    {
+        $this->client = $client;
+        $this->stats = $stats;
+    }
 
-    public function handle(Request $request, Closure $next): mixed
+    /**
+     * @param  Request  $request
+     * @param  Closure  $next
+     * @return mixed
+     */
+    public function handle($request, $next)
     {
         Guard::run(function () use ($request) {
             $this->stats->reset();
@@ -40,7 +59,11 @@ class SlowRequestMiddleware
         return $response;
     }
 
-    public function terminate(Request $request, mixed $response): void
+    /**
+     * @param  Request  $request
+     * @param  mixed  $response
+     */
+    public function terminate($request, $response): void
     {
         Guard::run(function () use ($request, $response) {
             $threshold = (int) ($this->client->config()['slow_request_ms'] ?? 0);
@@ -50,16 +73,10 @@ class SlowRequestMiddleware
                 return;
             }
 
-            $this->client->push($this->client->factory()->slowRequest(
-                $duration,
-                $threshold,
-                memory_get_peak_usage(true) / 1048576,
-                $this->stats->queries(),
-                [
-                    'request' => $request,
-                    'status_code' => $response instanceof Response ? $response->getStatusCode() : null,
-                ],
-            ));
+            $this->client->push($this->client->factory()->slowRequest($duration, $threshold, memory_get_peak_usage(true) / 1048576, $this->stats->queries(), [
+                'request' => $request,
+                'status_code' => $response instanceof Response ? $response->getStatusCode() : null,
+            ]));
         });
     }
 }

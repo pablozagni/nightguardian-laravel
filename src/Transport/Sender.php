@@ -11,5 +11,5 @@ interface Sender
     /**
      * @param  list<array<string, mixed>>  $events
      */
-    public function dispatch(array $events): void;
+    public function dispatch($events): void;
 }

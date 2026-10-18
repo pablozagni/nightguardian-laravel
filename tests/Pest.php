@@ -21,7 +21,9 @@ function ngCaptured(?string $type = null): array
     // Events still buffered plus events already handed to the (fake) transport by a flush point.
     $events = array_merge(app(Transport::class)->events(), app(Buffer::class)->all());
 
-    return $type === null ? $events : array_values(array_filter($events, fn (array $e) => $e['type'] === $type));
+    return $type === null ? $events : array_values(array_filter($events, function (array $e) use ($type) {
+        return $e['type'] === $type;
+    }));
 }
 
 /**
@@ -46,9 +48,7 @@ function ngSchemaErrors(array ...$events): array
         return [];
     }
 
-    return array_map(
-        static fn ($messages, $path) => $path.': '.implode('; ', (array) $messages),
-        (new ErrorFormatter)->format($result->error()),
-        array_keys((new ErrorFormatter)->format($result->error())),
-    );
+    return array_map(static function ($messages, $path) {
+        return $path.': '.implode('; ', (array) $messages);
+    }, (new ErrorFormatter)->format($result->error()), array_keys((new ErrorFormatter)->format($result->error())));
 }

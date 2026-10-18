@@ -7,7 +7,15 @@ namespace NightGuardian\Laravel\Event;
  */
 class RuntimeContext
 {
-    public function __construct(private string $frameworkVersion) {}
+    /**
+     * @var string
+     */
+    private $frameworkVersion;
+
+    public function __construct(string $frameworkVersion)
+    {
+        $this->frameworkVersion = $frameworkVersion;
+    }
 
     /**
      * @return array<string, string>
@@ -19,7 +27,7 @@ class RuntimeContext
             'version' => PHP_VERSION,
             'framework' => 'laravel',
             'framework_version' => $this->frameworkVersion,
-            'os' => PHP_OS_FAMILY,
+            'os' => defined('PHP_OS_FAMILY') ? PHP_OS_FAMILY : (stripos(PHP_OS, 'WIN') === 0 ? 'Windows' : PHP_OS),
         ];
     }
 

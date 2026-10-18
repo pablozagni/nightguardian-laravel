@@ -22,7 +22,19 @@ abstract class TestCase extends Orchestra
      * has no URL or token, nothing is sent over the network (the transport is a fake) and its spool lives
      * in a throwaway directory. Real-collector checks live in tests/E2E and are opt-in (see CONTRIBUTING.md).
      */
-    protected function defineEnvironment($app): void
+    /**
+     * `expectsOutputToContain()` only exists from Laravel 9, so the 1.x line runs commands itself.
+     *
+     * @param  string  $command
+     * @param  array<string, mixed>  $parameters
+     * @return CommandProbe
+     */
+    public function artisan($command, $parameters = [])
+    {
+        return new CommandProbe($this, $command, $parameters);
+    }
+
+    protected function getEnvironmentSetUp($app): void
     {
         $app['config']->set('nightguardian.url', '');
         $app['config']->set('nightguardian.token', '');

@@ -11,16 +11,40 @@ use Throwable;
  */
 class CurlTransport implements Transport
 {
-    private const MAX_RESPONSE_BYTES = 1_048_576;
+    /**
+     * @var string
+     */
+    private $url;
 
-    public function __construct(
-        private string $url,
-        private string $token,
-        private float $timeout = 2.0,
-        private float $connectTimeout = 1.0,
-    ) {}
+    /**
+     * @var string
+     */
+    private $token;
 
-    public function send(array $events): TransportResult
+    /**
+     * @var float
+     */
+    private $timeout = 2.0;
+
+    /**
+     * @var float
+     */
+    private $connectTimeout = 1.0;
+
+    private const MAX_RESPONSE_BYTES = 1048576;
+
+    public function __construct(string $url, string $token, float $timeout = 2.0, float $connectTimeout = 1.0)
+    {
+        $this->url = $url;
+        $this->token = $token;
+        $this->timeout = $timeout;
+        $this->connectTimeout = $connectTimeout;
+    }
+
+    /**
+     * @param  mixed[]  $events
+     */
+    public function send($events): TransportResult
     {
         try {
             return $this->post($events);

@@ -28,7 +28,9 @@ function ngClock(): FakeClock
 
 function ngBatch(int $count = 1, string $prefix = 'e'): array
 {
-    return array_map(fn (int $i) => ['id' => "{$prefix}{$i}", 'type' => 'log', 'level' => 'error', 'payload' => ['message' => "event {$i}"]], range(1, $count));
+    return array_map(function (int $i) use ($prefix) {
+        return ['id' => "{$prefix}{$i}", 'type' => 'log', 'level' => 'error', 'payload' => ['message' => "event {$i}"]];
+    }, range(1, $count));
 }
 
 function ngFail(int $status, ?string $error = null, ?int $retryAfter = null): TransportResult
@@ -217,11 +219,21 @@ it('drops a single event that is too large', function () {
 it('splits repeatedly until only the oversized event is dropped', function () {
     // 3 events: the whole batch and the half that contains the big event (e1,e2) are too large.
     ngTransport()->script = [
-        fn () => ngFail(413),
-        fn () => ngFail(413),
-        fn () => ngFail(413),      // e1 alone is too large
-        fn ($events) => FakeTransport::accepted($events),   // e2
-        fn ($events) => FakeTransport::accepted($events),   // e3
+        function () {
+            return ngFail(413);
+        },
+        function () {
+            return ngFail(413);
+        },
+        function () {
+            return ngFail(413);
+        },      // e1 alone is too large
+        function ($events) {
+            return FakeTransport::accepted($events);
+        },   // e2
+        function ($events) {
+            return FakeTransport::accepted($events);
+        },   // e3
     ];
 
     $result = ngDispatcher()->deliver(ngBatch(3));
@@ -255,14 +267,7 @@ it('drops events and counts them when the spool cannot be written', function () 
     $blocker = tempnam(sys_get_temp_dir(), 'ngfile');
     $clock = ngClock();
 
-    $dispatcher = new Dispatcher(
-        ngTransport(),
-        new Spool($blocker.'/spool', 1048576, 7, $clock),
-        new CircuitBreaker($blocker.'/breaker.json', $clock),
-        new Stats($blocker.'/stats.json'),
-        $clock,
-        $blocker.'/drain.lock',
-    );
+    $dispatcher = new Dispatcher(ngTransport(), new Spool($blocker.'/spool', 1048576, 7, $clock), new CircuitBreaker($blocker.'/breaker.json', $clock), new Stats($blocker.'/stats.json'), $clock, $blocker.'/drain.lock');
 
     ngTransport()->script[] = ngFail(0);
     $result = $dispatcher->deliver(ngBatch(3));
@@ -286,7 +291,7 @@ it('drains the whole spool oldest first on demand, even with the breaker open', 
 
     expect(ngDispatcher()->breaker()->status()['state'])->toBe('open');
 
-    $result = ngDispatcher()->drain(all: true, force: true);
+    $result = ngDispatcher()->drain(true, true);
 
     expect($result->drained)->toBe(3)
         ->and(array_column(array_slice(ngTransport()->batches, 1), 0))->toBe([ngBatch(1, 'a')[0], ngBatch(1, 'b')[0], ngBatch(1, 'c')[0]])
@@ -298,7 +303,7 @@ it('does not drain through an open breaker unless forced', function () {
     ngTransport()->script[] = ngFail(0);
     ngDispatcher()->deliver(ngBatch(1));
 
-    $result = ngDispatcher()->drain(all: true);
+    $result = ngDispatcher()->drain(true);
 
     expect($result->drained)->toBe(0)->and($result->circuitOpen)->toBeTrue()->and(ngTransport()->batches)->toHaveCount(1);
 });
@@ -309,7 +314,7 @@ it('stops draining at the first failure and keeps the rest', function () {
     ngDispatcher()->spool()->write(ngBatch(1, 'b'));
 
     ngTransport()->script = [FakeTransport::accepted(ngBatch(1, 'a')), ngFail(503)];
-    $result = ngDispatcher()->drain(all: true, force: true);
+    $result = ngDispatcher()->drain(true, true);
 
     expect($result->drained)->toBe(1)->and(ngDispatcher()->spool()->count())->toBe(1);
 });
@@ -318,7 +323,7 @@ it('removes corrupt spool files while draining', function () {
     ngDispatcher()->spool()->write(ngBatch(1));
     file_put_contents(ngDispatcher()->spool()->oldest(), 'garbage');
 
-    $result = ngDispatcher()->drain(all: true, force: true);
+    $result = ngDispatcher()->drain(true, true);
 
     expect($result->drained)->toBe(1)->and(ngDispatcher()->spool()->count())->toBe(0)->and(ngTransport()->batches)->toBe([]);
 });
@@ -328,7 +333,7 @@ it('keeps only the undelivered part of a spooled batch that had to be split', fu
 
     // Too large -> split; first half accepted, second half unavailable.
     ngTransport()->script = [ngFail(413), FakeTransport::accepted(ngBatch(2)), ngFail(503)];
-    ngDispatcher()->drain(force: true);
+    ngDispatcher()->drain(false, true);
 
     $remaining = ngDispatcher()->spool()->read(ngDispatcher()->spool()->oldest());
 
@@ -342,14 +347,14 @@ it('never drains in parallel: a held lock skips the drain', function () {
     $lock = fopen($this->storage.'/drain.lock', 'c');
     flock($lock, LOCK_EX | LOCK_NB);
 
-    $result = ngDispatcher()->drain(all: true, force: true);
+    $result = ngDispatcher()->drain(true, true);
 
     flock($lock, LOCK_UN);
     fclose($lock);
 
     expect($result->drained)->toBe(0)->and(ngDispatcher()->spool()->count())->toBe(1);
 
-    expect(ngDispatcher()->drain(force: true)->drained)->toBe(1);
+    expect(ngDispatcher()->drain(false, true)->drained)->toBe(1);
 });
 
 it('moves SDK internal errors into the persisted stats', function () {

@@ -10,24 +10,40 @@ use Throwable;
  */
 class Stats
 {
+    /**
+     * @var string
+     */
+    private $path;
+
     public const COUNTERS = ['sent_events', 'rejected_events', 'dropped_events', 'spooled_events', 'failed_batches', 'internal_errors'];
 
     /** @var array<string, int> */
-    private array $increments = [];
+    private $increments = [];
 
     /** @var array<string, mixed> */
-    private array $values = [];
+    private $values = [];
 
-    public function __construct(private string $path) {}
+    public function __construct(string $path)
+    {
+        $this->path = $path;
+    }
 
-    public function increment(string $counter, int $by = 1): void
+    /**
+     * @param  string  $counter
+     * @param  int  $by
+     */
+    public function increment($counter, $by = 1): void
     {
         if ($by > 0) {
             $this->increments[$counter] = ($this->increments[$counter] ?? 0) + $by;
         }
     }
 
-    public function set(string $key, mixed $value): void
+    /**
+     * @param  string  $key
+     * @param  mixed  $value
+     */
+    public function set($key, $value): void
     {
         $this->values[$key] = $value;
     }
@@ -48,7 +64,12 @@ class Stats
         return $this->values + $data;
     }
 
-    public function get(string $key, mixed $default = null): mixed
+    /**
+     * @param  string  $key
+     * @param  mixed  $default
+     * @return mixed
+     */
+    public function get($key, $default = null)
     {
         return $this->all()[$key] ?? $default;
     }

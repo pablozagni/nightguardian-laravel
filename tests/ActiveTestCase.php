@@ -18,11 +18,14 @@ use NightGuardian\Laravel\Transport\Transport;
  */
 abstract class ActiveTestCase extends TestCase
 {
-    protected string $storage = '';
+    /**
+     * @var string
+     */
+    protected $storage = '';
 
-    protected function defineEnvironment($app): void
+    protected function getEnvironmentSetUp($app): void
     {
-        parent::defineEnvironment($app);
+        parent::getEnvironmentSetUp($app);
 
         $app['config']->set('nightguardian', array_replace($app['config']->get('nightguardian', []), [
             'enabled' => true,
@@ -44,7 +47,9 @@ abstract class ActiveTestCase extends TestCase
         $app['config']->set('cache.default', 'array');
 
         // Make this package's directory "the application", so test files count as in-app code.
-        $app->singleton(StackTrace::class, fn () => new StackTrace(dirname(__DIR__)));
+        $app->singleton(StackTrace::class, function () {
+            return new StackTrace(dirname(__DIR__));
+        });
 
         $this->storage = sys_get_temp_dir().'/ng-test-'.bin2hex(random_bytes(5));
 
@@ -54,14 +59,7 @@ abstract class ActiveTestCase extends TestCase
         $app->singleton(Dispatcher::class, function ($app) {
             $clock = $app->make(Clock::class);
 
-            return new Dispatcher(
-                $app->make(Transport::class),
-                new Spool($this->storage.'/spool', 10 * 1048576, 7, $clock),
-                new CircuitBreaker($this->storage.'/breaker.json', $clock),
-                new Stats($this->storage.'/stats.json'),
-                $clock,
-                $this->storage.'/drain.lock',
-            );
+            return new Dispatcher($app->make(Transport::class), new Spool($this->storage.'/spool', 10 * 1048576, 7, $clock), new CircuitBreaker($this->storage.'/breaker.json', $clock), new Stats($this->storage.'/stats.json'), $clock, $this->storage.'/drain.lock');
         });
     }
 

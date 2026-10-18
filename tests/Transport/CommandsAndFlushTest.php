@@ -242,6 +242,8 @@ it('does not break the application when the collector is down at the end of a re
 
     Log::error('lost? no, spooled');
 
-    expect(fn () => app()->terminate())->not->toThrow(Throwable::class)
+    expect(function () {
+        return app()->terminate();
+    })->not->toThrow(Throwable::class)
         ->and(app(Dispatcher::class)->spool()->count())->toBe(1);
 });

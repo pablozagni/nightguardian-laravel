@@ -6,14 +6,25 @@ use NightGuardian\Laravel\Support\Clock;
 
 class FakeClock implements Clock
 {
-    public function __construct(private float $now = 1_800_000_000.0) {}
+    /**
+     * @var float
+     */
+    private $now = 1800000000.0;
+
+    public function __construct(float $now = 1800000000.0)
+    {
+        $this->now = $now;
+    }
 
     public function now(): float
     {
         return $this->now;
     }
 
-    public function advance(float $seconds): void
+    /**
+     * @param  float  $seconds
+     */
+    public function advance($seconds): void
     {
         $this->now += $seconds;
     }

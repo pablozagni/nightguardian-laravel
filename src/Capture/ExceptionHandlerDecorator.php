@@ -25,38 +25,78 @@ use Throwable;
  */
 class ExceptionHandlerDecorator implements ExceptionHandler
 {
+    /**
+     * @var ExceptionHandler
+     */
+    private $handler;
+
+    /**
+     * @var NightGuardian
+     */
+    private $client;
+
+    /**
+     * @var ViewFactory
+     */
+    private $views;
+
+    /**
+     * @var FeedbackSigner
+     */
+    private $signer;
+
+    /**
+     * @var Config
+     */
+    private $config;
+
     public const HEADER = 'X-NightGuardian-Reference';
 
-    public function __construct(
-        private ExceptionHandler $handler,
-        private NightGuardian $client,
-        private ViewFactory $views,
-        private FeedbackSigner $signer,
-        private Config $config,
-    ) {}
+    public function __construct(ExceptionHandler $handler, NightGuardian $client, ViewFactory $views, FeedbackSigner $signer, Config $config)
+    {
+        $this->handler = $handler;
+        $this->client = $client;
+        $this->views = $views;
+        $this->signer = $signer;
+        $this->config = $config;
+    }
 
-    public function report(Throwable $e): void
+    /**
+     * @param  Throwable  $e
+     */
+    public function report($e): void
     {
         $this->handler->report($e);
     }
 
-    public function shouldReport(Throwable $e)
+    /**
+     * @param  Throwable  $e
+     */
+    public function shouldReport($e)
     {
         return $this->handler->shouldReport($e);
     }
 
-    public function render($request, Throwable $e)
+    /**
+     * @param  Throwable  $e
+     */
+    public function render($request, $e)
     {
         $response = $this->handler->render($request, $e);
 
         try {
-            return Guard::contain(fn () => $this->decorate($request, $e, $response), $response) ?? $response;
+            return Guard::contain(function () use ($request, $e, $response) {
+                return $this->decorate($request, $e, $response);
+            }, $response) ?? $response;
         } catch (Throwable $failure) {
             return $response;
         }
     }
 
-    public function renderForConsole($output, Throwable $e): void
+    /**
+     * @param  Throwable  $e
+     */
+    public function renderForConsole($output, $e): void
     {
         $this->handler->renderForConsole($output, $e);
     }
@@ -65,8 +105,9 @@ class ExceptionHandlerDecorator implements ExceptionHandler
      * Everything else (reportable, renderable, ignore, dontReport, ...) is the original handler's business.
      *
      * @param  array<int, mixed>  $arguments
+     * @return mixed
      */
-    public function __call(string $method, array $arguments): mixed
+    public function __call(string $method, array $arguments)
     {
         return $this->handler->{$method}(...$arguments);
     }
@@ -76,7 +117,12 @@ class ExceptionHandlerDecorator implements ExceptionHandler
         return $this->handler;
     }
 
-    private function decorate(mixed $request, Throwable $e, mixed $response): mixed
+    /**
+     * @param  mixed  $request
+     * @param  mixed  $response
+     * @return mixed
+     */
+    private function decorate($request, Throwable $e, $response)
     {
         if (! $response instanceof \Symfony\Component\HttpFoundation\Response || ! $request instanceof Request) {
             return $response;

@@ -45,7 +45,7 @@ class DeployCommand extends Command
             'url' => $this->text('url'),
         ], ['request' => false]);
 
-        $result = $dispatcher->deliver([$event], force: true);
+        $result = $dispatcher->deliver([$event], true);
 
         if ($result->delivered > 0 && $result->spooled === 0) {
             $this->info("OK  Deploy marker sent for release {$name}.");

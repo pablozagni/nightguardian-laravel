@@ -11,18 +11,27 @@ class Buffer
     public const MAX_EVENTS = 100;
 
     /** @var list<array<string, mixed>> */
-    private array $events = [];
+    private $events = [];
 
-    private int $dropped = 0;
+    /**
+     * @var int
+     */
+    private $dropped = 0;
 
-    private ?string $lastReference = null;
+    /**
+     * @var string|null
+     */
+    private $lastReference;
 
-    private ?string $lastEventId = null;
+    /**
+     * @var string|null
+     */
+    private $lastEventId;
 
     /**
      * @param  array<string, mixed>  $event
      */
-    public function add(array $event): bool
+    public function add($event): bool
     {
         if (isset($event['reference']) && is_string($event['reference']) && isset($event['id']) && is_string($event['id'])) {
             $this->lastReference = $event['reference'];

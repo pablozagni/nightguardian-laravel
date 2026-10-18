@@ -33,12 +33,9 @@ class TestCommand extends Command
 
         $this->line("Sending a test event to {$client->ingestUrl()} ...");
 
-        $event = $client->factory()->test(
-            new RuntimeException('NightGuardian test event: if you can read this in your panel, the connection works.'),
-            ['request' => false],
-        );
+        $event = $client->factory()->test(new RuntimeException('NightGuardian test event: if you can read this in your panel, the connection works.'), ['request' => false]);
 
-        $result = $dispatcher->deliver([$event], force: true);
+        $result = $dispatcher->deliver([$event], true);
 
         return $this->report($result, $event['reference'] ?? null, $dispatcher);
     }
@@ -89,12 +86,20 @@ class TestCommand extends Command
         }
 
         if ($result->spooled > 0) {
-            $why = match (true) {
-                $result->status === 0 => 'The collector could not be reached'.($result->error !== null ? " ({$result->error})" : '').'.',
-                $result->status === 429 => 'The collector is rate limiting this project (HTTP 429).',
-                $result->status !== null && $result->status >= 500 => "The collector failed to process the request (HTTP {$result->status}).",
-                default => 'The collector did not accept the event'.($result->status ? " (HTTP {$result->status})" : '').'.',
-            };
+            switch (true) {
+                case $result->status === 0:
+                    $why = 'The collector could not be reached'.($result->error !== null ? " ({$result->error})" : '').'.';
+                    break;
+                case $result->status === 429:
+                    $why = 'The collector is rate limiting this project (HTTP 429).';
+                    break;
+                case $result->status !== null && $result->status >= 500:
+                    $why = "The collector failed to process the request (HTTP {$result->status}).";
+                    break;
+                default:
+                    $why = 'The collector did not accept the event'.($result->status ? " (HTTP {$result->status})" : '').'.';
+                    break;
+            }
 
             $this->warn($why);
             $this->line("The event was saved in the spool ({$dispatcher->spool()->count()} batch(es) waiting) and will be sent automatically when the collector answers again.");

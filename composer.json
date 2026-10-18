@@ -1,32 +1,39 @@
 {
     "name": "nightguardian/laravel",
     "description": "Laravel SDK for NightGuardian: self-hosted error and health monitoring that never slows down or breaks your app.",
-    "keywords": ["laravel", "monitoring", "error-tracking", "exceptions", "nightguardian"],
+    "keywords": [
+        "laravel",
+        "monitoring",
+        "error-tracking",
+        "exceptions",
+        "nightguardian"
+    ],
     "license": "MIT",
     "homepage": "https://github.com/pablozagni/nightguardian-laravel",
     "type": "library",
     "require": {
-        "php": "^8.1",
+        "php": "^7.1.3|^8.0",
         "ext-curl": "*",
         "ext-json": "*",
         "ext-zlib": "*",
-        "illuminate/cache": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/console": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/contracts": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/http": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/log": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/queue": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/routing": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/support": "^9.0|^10.0|^11.0|^12.0|^13.0",
-        "illuminate/view": "^9.0|^10.0|^11.0|^12.0|^13.0"
+        "illuminate/cache": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/console": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/contracts": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/http": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/log": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/queue": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/routing": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/support": "^5.8|^6.0|^7.0|^8.0",
+        "illuminate/view": "^5.8|^6.0|^7.0|^8.0"
     },
     "require-dev": {
+        "laravel/framework": "8.*",
         "laravel/pint": "^1.13",
-        "larastan/larastan": "^2.9|^3.0",
         "opis/json-schema": "^2.3",
-        "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0|^11.0",
-        "pestphp/pest": "^1.23|^2.0|^3.0|^4.0",
-        "pestphp/pest-plugin-laravel": "^1.4|^2.0|^3.0|^4.0"
+        "orchestra/testbench": "^6.0",
+        "pestphp/pest": "^1.0",
+        "pestphp/pest-plugin-laravel": "^1.0",
+        "phpstan/phpstan": "^1.10"
     },
     "autoload": {
         "psr-4": {
@@ -39,9 +46,6 @@
         }
     },
     "extra": {
-        "branch-alias": {
-            "dev-main": "2.x-dev"
-        },
         "laravel": {
             "providers": [
                 "NightGuardian\\Laravel\\NightGuardianServiceProvider"
@@ -62,6 +66,9 @@
         "preferred-install": "dist",
         "allow-plugins": {
             "pestphp/pest-plugin": true
+        },
+        "audit": {
+            "block-insecure": false
         }
     },
     "minimum-stability": "stable",

@@ -13,20 +13,29 @@ use Throwable;
  */
 final class Guard
 {
-    private static bool $active = false;
+    /**
+     * @var bool
+     */
+    private static $active = false;
 
-    private static int $errors = 0;
+    /**
+     * @var int
+     */
+    private static $errors = 0;
 
-    private static ?string $lastError = null;
+    /**
+     * @var string|null
+     */
+    private static $lastError;
 
     /**
      * @template T
      *
      * @param  callable(): T  $callback
-     * @param  T  $default  Returned when the guard is busy or the callback throws.
+     * @param  mixed  $default  Returned when the guard is busy or the callback throws.
      * @return T
      */
-    public static function run(callable $callback, mixed $default = null): mixed
+    public static function run(callable $callback, $default = null)
     {
         if (self::$active) {
             return $default;
@@ -38,7 +47,7 @@ final class Guard
             return $callback();
         } catch (Throwable $e) {
             self::$errors++;
-            self::$lastError = mb_substr($e::class.': '.$e->getMessage().' ('.basename($e->getFile()).':'.$e->getLine().')', 0, 300);
+            self::$lastError = mb_substr(get_class($e).': '.$e->getMessage().' ('.basename($e->getFile()).':'.$e->getLine().')', 0, 300);
 
             return $default;
         } finally {
@@ -53,10 +62,10 @@ final class Guard
      * @template T
      *
      * @param  callable(): T  $callback
-     * @param  T  $default
+     * @param  mixed  $default
      * @return T
      */
-    public static function contain(callable $callback, mixed $default = null): mixed
+    public static function contain(callable $callback, $default = null)
     {
         $owner = ! self::$active;
         self::$active = true;
@@ -82,7 +91,7 @@ final class Guard
     public static function record(Throwable $e): void
     {
         self::$errors++;
-        self::$lastError = mb_substr($e::class.': '.$e->getMessage(), 0, 300);
+        self::$lastError = mb_substr(get_class($e).': '.$e->getMessage(), 0, 300);
     }
 
     public static function errors(): int

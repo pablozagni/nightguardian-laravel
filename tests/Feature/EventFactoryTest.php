@@ -15,8 +15,9 @@ use NightGuardian\Laravel\Support\Json;
 
 /**
  * @param  array<string, mixed>  $config
+ * @param  mixed  $resolver
  */
-function ngFactory(array $config = [], ?Closure $request = null, mixed $resolver = null, bool $sendEmail = false, ?Closure $guardUser = null): EventFactory
+function ngFactory(array $config = [], ?Closure $request = null, $resolver = null, bool $sendEmail = false, ?Closure $guardUser = null): EventFactory
 {
     $config += [
         'environment' => 'testing',
@@ -26,17 +27,9 @@ function ngFactory(array $config = [], ?Closure $request = null, mixed $resolver
 
     $scrubber = new Scrubber($config['scrub_keys'] ?? []);
 
-    return new EventFactory(
-        $config,
-        $scrubber,
-        new StackTrace(dirname(__DIR__, 2)),
-        new RequestContext($scrubber, (bool) ($config['send_ip'] ?? false), (bool) ($config['send_request_body'] ?? false)),
-        new UserContext($guardUser, $resolver, $sendEmail),
-        new RuntimeContext('12.4.0'),
-        new Release($config['release'] ?? '1.2.3', dirname(__DIR__, 2)),
-        $request,
-        fn () => new DateTimeImmutable('2026-10-17 10:45:11.902123', new DateTimeZone('America/Argentina/Buenos_Aires')),
-    );
+    return new EventFactory($config, $scrubber, new StackTrace(dirname(__DIR__, 2)), new RequestContext($scrubber, (bool) ($config['send_ip'] ?? false), (bool) ($config['send_request_body'] ?? false)), new UserContext($guardUser, $resolver, $sendEmail), new RuntimeContext('12.4.0'), new Release($config['release'] ?? '1.2.3', dirname(__DIR__, 2)), $request, function () {
+        return new DateTimeImmutable('2026-10-17 10:45:11.902123', new DateTimeZone('America/Argentina/Buenos_Aires'));
+    });
 }
 
 function ngRequest(string $uri = 'https://app.test/invoices/12?page=2', string $method = 'POST', array $parameters = [], array $server = []): Request
@@ -141,7 +134,9 @@ it('describes the current HTTP request with scrubbed URL and allowlisted headers
         'REMOTE_ADDR' => '203.0.113.9',
     ]);
 
-    $event = ngFactory(request: fn () => $request)->exception(ngException(), ['status_code' => 500, 'duration_ms' => 312]);
+    $event = ngFactory([], function () use ($request) {
+        return $request;
+    })->exception(ngException(), ['status_code' => 500, 'duration_ms' => 312]);
 
     expect($event['request'])->toBe([
         'method' => 'POST',
@@ -155,23 +150,31 @@ it('describes the current HTTP request with scrubbed URL and allowlisted headers
 
 it('uses the route name, or the URI pattern when the route has no name', function () {
     $named = ngRequest();
-    $named->setRouteResolver(fn () => (new Route('POST', 'invoices/{invoice}', fn () => null))->name('invoices.update'));
+    $named->setRouteResolver(function () {
+        return (new Route('POST', 'invoices/{invoice}', function () {
+            return null;
+        }))->name('invoices.update');
+    });
     $unnamed = ngRequest();
-    $unnamed->setRouteResolver(fn () => new Route('POST', 'invoices/{invoice}', fn () => null));
+    $unnamed->setRouteResolver(function () {
+        return new Route('POST', 'invoices/{invoice}', function () {
+            return null;
+        });
+    });
 
     expect(ngFactory()->exception(ngException(), ['request' => $named])['request']['route'])->toBe('invoices.update')
         ->and(ngFactory()->exception(ngException(), ['request' => $unnamed])['request']['route'])->toBe('invoices/{invoice}');
 });
 
 it('only sends the IP when the app opts in', function () {
-    $request = ngRequest(server: ['REMOTE_ADDR' => '203.0.113.9']);
+    $request = ngRequest('https://app.test/invoices/12?page=2', 'POST', [], ['REMOTE_ADDR' => '203.0.113.9']);
 
     expect(ngFactory(['send_ip' => false])->exception(ngException(), ['request' => $request])['request']['ip'])->toBeNull()
         ->and(ngFactory(['send_ip' => true])->exception(ngException(), ['request' => $request])['request']['ip'])->toBe('203.0.113.9');
 });
 
 it('only sends the request body when the app opts in, scrubbed', function () {
-    $request = ngRequest(parameters: ['name' => 'Ada', 'password' => 'hunter2', '_token' => 'csrf', 'note' => 'card 4111 1111 1111 1111']);
+    $request = ngRequest('https://app.test/invoices/12?page=2', 'POST', ['name' => 'Ada', 'password' => 'hunter2', '_token' => 'csrf', 'note' => 'card 4111 1111 1111 1111']);
 
     expect(ngFactory()->exception(ngException(), ['request' => $request])['request'])->not->toHaveKey('body');
 
@@ -181,7 +184,7 @@ it('only sends the request body when the app opts in, scrubbed', function () {
 });
 
 it('replaces an oversized request body with its keys', function () {
-    $request = ngRequest(parameters: ['blob' => str_repeat('x', 20000), 'other' => 'y']);
+    $request = ngRequest('https://app.test/invoices/12?page=2', 'POST', ['blob' => str_repeat('x', 20000), 'other' => 'y']);
 
     $body = ngFactory(['send_request_body' => true])->exception(ngException(), ['request' => $request])['request']['body'];
 
@@ -189,17 +192,21 @@ it('replaces an oversized request body with its keys', function () {
 });
 
 it('has no request object in the console', function () {
-    expect(ngFactory(request: fn () => null)->exception(ngException()))->not->toHaveKey('request');
+    expect(ngFactory([], function () {
+        return null;
+    })->exception(ngException()))->not->toHaveKey('request');
 });
 
 it('can be told explicitly to skip the request', function () {
-    $factory = ngFactory(request: fn () => ngRequest());
+    $factory = ngFactory([], function () {
+        return ngRequest();
+    });
 
     expect($factory->exception(ngException(), ['request' => false]))->not->toHaveKey('request');
 });
 
 it('survives a failing request resolver', function () {
-    $factory = ngFactory(request: function () {
+    $factory = ngFactory([], function () {
         throw new RuntimeException('no request');
     });
 
@@ -211,16 +218,25 @@ it('survives a failing request resolver', function () {
 it('sends only the user id by default', function () {
     $user = new class implements Authenticatable
     {
-        public string $email = 'ada@example.com';
+        /**
+         * @var string
+         */
+        public $email = 'ada@example.com';
 
-        public string $name = 'Ada';
+        /**
+         * @var string
+         */
+        public $name = 'Ada';
 
         public function getAuthIdentifierName(): string
         {
             return 'id';
         }
 
-        public function getAuthIdentifier(): mixed
+        /**
+         * @return mixed
+         */
+        public function getAuthIdentifier()
         {
             return 42;
         }
@@ -248,34 +264,56 @@ it('sends only the user id by default', function () {
         }
     };
 
-    expect(ngFactory(guardUser: fn () => $user)->exception(ngException())['user'])->toBe(['id' => '42'])
-        ->and(ngFactory(sendEmail: true, guardUser: fn () => $user)->exception(ngException())['user'])
+    expect(ngFactory([], null, null, false, function () use ($user) {
+        return $user;
+    })->exception(ngException())['user'])->toBe(['id' => '42'])
+        ->and(ngFactory([], null, null, true, function () use ($user) {
+            return $user;
+        })->exception(ngException())['user'])
         ->toBe(['id' => '42', 'email' => 'ada@example.com', 'name' => 'Ada']);
 });
 
 it('uses the configured user resolver and only keeps email and name when allowed', function () {
-    $resolver = fn () => ['id' => 7, 'email' => 'bob@example.com', 'name' => 'Bob', 'password' => 'x'];
+    $resolver = function () {
+        return ['id' => 7, 'email' => 'bob@example.com', 'name' => 'Bob', 'password' => 'x'];
+    };
 
-    expect(ngFactory(resolver: $resolver)->exception(ngException())['user'])->toBe(['id' => '7'])
-        ->and(ngFactory(resolver: $resolver, sendEmail: true)->exception(ngException())['user'])
+    expect(ngFactory([], null, $resolver)->exception(ngException())['user'])->toBe(['id' => '7'])
+        ->and(ngFactory([], null, $resolver, true)->exception(ngException())['user'])
         ->toBe(['id' => '7', 'email' => 'bob@example.com', 'name' => 'Bob']);
 });
 
 it('omits the user when nobody is logged in, or the resolver misbehaves', function (string $case) {
-    $resolver = match ($case) {
-        'no id' => fn () => ['email' => 'x@y.z'],
-        'null' => fn () => null,
-        'array id' => fn () => ['id' => ['no']],
-        default => function () {
-            throw new RuntimeException('db down');
-        },
-    };
+    switch ($case) {
+        case 'no id':
+            $resolver = function () {
+                return ['email' => 'x@y.z'];
+            };
+            break;
+        case 'null':
+            $resolver = function () {
+                return null;
+            };
+            break;
+        case 'array id':
+            $resolver = function () {
+                return ['id' => ['no']];
+            };
+            break;
+        default:
+            $resolver = function () {
+                throw new RuntimeException('db down');
+            };
+            break;
+    }
 
-    expect(ngFactory(resolver: $resolver)->exception(ngException()))->not->toHaveKey('user');
+    expect(ngFactory([], null, $resolver)->exception(ngException()))->not->toHaveKey('user');
 })->with(['no id', 'null', 'array id', 'throws']);
 
 it('does not mangle a numeric user id that looks like a card number', function () {
-    $event = ngFactory(resolver: fn () => ['id' => '4111111111111111'])->exception(ngException());
+    $event = ngFactory([], null, function () {
+        return ['id' => '4111111111111111'];
+    })->exception(ngException());
 
     expect($event['user']['id'])->toBe('4111111111111111');
 });
@@ -323,7 +361,9 @@ it('keeps events under 256 KB by dropping code context first', function () {
         $exceptions[] = new RuntimeException(str_repeat('é', 3000).$i);
     }
 
-    $big = array_reduce(array_reverse($exceptions), fn (?Throwable $previous, Throwable $e) => new RuntimeException($e->getMessage(), 0, $previous), null);
+    $big = array_reduce(array_reverse($exceptions), function (?Throwable $previous, Throwable $e) {
+        return new RuntimeException($e->getMessage(), 0, $previous);
+    }, null);
     $event = $factory->exception($big, ['context' => ['a' => str_repeat('b', 30000)]]);
 
     expect(Json::size($event))->toBeLessThanOrEqual(EventFactory::MAX_EVENT_BYTES);
@@ -442,7 +482,9 @@ it('builds deploy events without a level and with the deployed release', functio
 });
 
 it('builds feedback events without request, level or reference of their own', function () {
-    $event = ngFactory(request: fn () => ngRequest())->feedback('6f1c1d1e-8a3b-4c55-9b2f-1d2e3f4a5b6c', 'NG-7F3K-92QD', str_repeat('c', 3000), 'ada@example.com');
+    $event = ngFactory([], function () {
+        return ngRequest();
+    })->feedback('6f1c1d1e-8a3b-4c55-9b2f-1d2e3f4a5b6c', 'NG-7F3K-92QD', str_repeat('c', 3000), 'ada@example.com');
 
     expect($event['type'])->toBe('feedback')
         ->and($event)->not->toHaveKeys(['level', 'request', 'reference'])
@@ -464,9 +506,15 @@ it('scrubs feedback comments', function () {
 
 it('produces events accepted by the schema for a request with every field', function () {
     $request = ngRequest('https://app.test/invoices/12?page=2', 'POST', ['x' => 'y'], ['HTTP_USER_AGENT' => 'Mozilla/5.0']);
-    $request->setRouteResolver(fn () => (new Route('POST', 'invoices/{invoice}', fn () => null))->name('invoices.update'));
+    $request->setRouteResolver(function () {
+        return (new Route('POST', 'invoices/{invoice}', function () {
+            return null;
+        }))->name('invoices.update');
+    });
 
-    $factory = ngFactory(['send_ip' => true, 'send_request_body' => true], resolver: fn () => ['id' => 42, 'email' => 'a@b.c'], sendEmail: true);
+    $factory = ngFactory(['send_ip' => true, 'send_request_body' => true], null, function () {
+        return ['id' => 42, 'email' => 'a@b.c'];
+    }, true);
     $inner = new PDOException('SQLSTATE[23000]: Integrity constraint violation');
     $event = $factory->exception(new RuntimeException('Wrapped', 0, $inner), [
         'request' => $request, 'status_code' => 500, 'duration_ms' => 312, 'tags' => ['tenant' => 'acme'],

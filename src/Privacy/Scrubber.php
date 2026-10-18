@@ -22,24 +22,25 @@ class Scrubber
     private const FORBIDDEN_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authorization', 'x-csrf-token', 'x-xsrf-token'];
 
     /** @var list<string> */
-    private array $keys;
+    private $keys;
 
     /**
      * @param  list<string>  $extraKeys  Additional denylist keys (config `scrub_keys`).
      */
     public function __construct(array $extraKeys = [])
     {
-        $this->keys = array_values(array_unique(array_filter(array_map(
-            static fn ($key) => strtolower(trim((string) $key)),
-            [...self::DEFAULT_KEYS, ...$extraKeys],
-        ), static fn (string $key) => $key !== '')));
+        $this->keys = array_values(array_unique(array_filter(array_map(static function ($key) {
+            return strtolower(trim((string) $key));
+        }, array_merge(self::DEFAULT_KEYS, $extraKeys)), static function (string $key) {
+            return $key !== '';
+        })));
     }
 
     /**
      * @param  array<array-key, mixed>  $data
      * @return array<array-key, mixed>
      */
-    public function scrub(array $data): array
+    public function scrub($data): array
     {
         $result = [];
 
@@ -58,38 +59,33 @@ class Scrubber
         return $result;
     }
 
-    public function scrubString(string $value): string
+    /**
+     * @param  string  $value
+     */
+    public function scrubString($value): string
     {
         // Private key blocks (also an unterminated block: everything after the header goes).
-        $value = preg_replace(
-            '/-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/s',
-            self::FILTERED,
-            $value,
-        ) ?? $value;
+        $value = preg_replace('/-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/s', self::FILTERED, $value) ?? $value;
 
         // Bearer tokens.
         $value = preg_replace('/\bBearer\s+[A-Za-z0-9._~+\/=-]+/i', 'Bearer '.self::FILTERED, $value) ?? $value;
 
         // JWTs.
-        $value = preg_replace(
-            '/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/',
-            self::FILTERED,
-            $value,
-        ) ?? $value;
+        $value = preg_replace('/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/', self::FILTERED, $value) ?? $value;
 
         // Card numbers: 13-19 digits, optionally separated by spaces or dashes, Luhn-valid.
-        return preg_replace_callback(
-            '/(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/',
-            fn (array $m) => $this->passesLuhn(preg_replace('/\D/', '', $m[0]) ?? '') ? self::FILTERED : $m[0],
-            $value,
-        ) ?? $value;
+        return preg_replace_callback('/(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/', function (array $m) {
+            return $this->passesLuhn(preg_replace('/\D/', '', $m[0]) ?? '') ? self::FILTERED : $m[0];
+        }, $value) ?? $value;
     }
 
     /**
      * Scrubs a URL: drops the fragment and any user:password@, filters sensitive query parameters
      * and runs the value patterns over the rest.
+     *
+     * @param  string  $url
      */
-    public function scrubUrl(string $url): string
+    public function scrubUrl($url): string
     {
         $url = explode('#', $url, 2)[0];
         [$base, $query] = array_pad(explode('?', $url, 2), 2, null);
@@ -129,7 +125,7 @@ class Scrubber
      * @param  list<string>  $allowlist
      * @return array<string, string>
      */
-    public function scrubHeaders(array $headers, array $allowlist): array
+    public function scrubHeaders($headers, $allowlist): array
     {
         $allowed = array_diff(array_map('strtolower', $allowlist), self::FORBIDDEN_HEADERS);
         $result = [];
@@ -148,12 +144,15 @@ class Scrubber
         return $result;
     }
 
-    public function isSensitiveKey(string $key): bool
+    /**
+     * @param  string  $key
+     */
+    public function isSensitiveKey($key): bool
     {
         $key = strtolower($key);
 
         foreach ($this->keys as $needle) {
-            if (str_contains($key, $needle)) {
+            if (strpos($key, $needle) !== false) {
                 return true;
             }
         }

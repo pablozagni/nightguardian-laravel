@@ -7,7 +7,9 @@ use NightGuardian\Laravel\Transport\Stats;
 
 function ngEventsOf(int $count, string $prefix = 'e'): array
 {
-    return array_map(fn (int $i) => ['id' => "{$prefix}{$i}", 'type' => 'log', 'payload' => ['message' => str_repeat('x', 200)]], range(1, $count));
+    return array_map(function (int $i) use ($prefix) {
+        return ['id' => "{$prefix}{$i}", 'type' => 'log', 'payload' => ['message' => str_repeat('x', 200)]];
+    }, range(1, $count));
 }
 
 function ngSpool(string $dir, ?FakeClock $clock = null, int $maxMb = 10, int $maxDays = 7): Spool
@@ -51,7 +53,7 @@ it('reports the age of the oldest batch', function () {
 
 it('deletes batches older than the maximum age', function () {
     $clock = new FakeClock;
-    $spool = ngSpool($this->storage, $clock, maxDays: 7);
+    $spool = ngSpool($this->storage, $clock, 10, 7);
 
     $spool->write(ngEventsOf(1, 'old'));
     $clock->advance(8 * 86400);
@@ -71,7 +73,9 @@ it('deletes the oldest batches first when the spool is over its size limit', fun
         $spool->write([['id' => "n{$i}", 'type' => 'log', 'payload' => ['message' => bin2hex(random_bytes(1000))]]]);
     }
 
-    $ids = array_map(fn (string $f) => $spool->read($f)[0]['id'], $spool->files());
+    $ids = array_map(function (string $f) use ($spool) {
+        return $spool->read($f)[0]['id'];
+    }, $spool->files());
 
     expect($spool->bytes())->toBeLessThanOrEqual(6000)
         ->and($ids)->not->toContain('n1')

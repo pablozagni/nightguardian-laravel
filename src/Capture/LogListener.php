@@ -14,9 +14,20 @@ use Throwable;
  */
 class LogListener
 {
-    public function __construct(private NightGuardian $client) {}
+    /**
+     * @var NightGuardian
+     */
+    private $client;
 
-    public function handle(MessageLogged $event): void
+    public function __construct(NightGuardian $client)
+    {
+        $this->client = $client;
+    }
+
+    /**
+     * @param  MessageLogged  $event
+     */
+    public function handle($event): void
     {
         Guard::run(function () use ($event) {
             if (! $this->client->isActive() || ! $this->client->meetsLogLevel((string) $event->level)) {
@@ -37,7 +48,10 @@ class LogListener
         });
     }
 
-    private function text(mixed $message): string
+    /**
+     * @param  mixed  $message
+     */
+    private function text($message): string
     {
         if (is_string($message)) {
             return $message;
@@ -47,6 +61,6 @@ class LogListener
             return (string) $message;
         }
 
-        return (string) json_encode($message, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        return (string) json_encode($message, JSON_PARTIAL_OUTPUT_ON_ERROR);
     }
 }

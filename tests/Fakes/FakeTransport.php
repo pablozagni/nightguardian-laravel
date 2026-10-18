@@ -12,12 +12,15 @@ use NightGuardian\Laravel\Transport\TransportResult;
 class FakeTransport implements Transport
 {
     /** @var list<list<array<string, mixed>>> */
-    public array $batches = [];
+    public $batches = [];
 
     /** @var list<TransportResult|callable> */
-    public array $script = [];
+    public $script = [];
 
-    public function send(array $events): TransportResult
+    /**
+     * @param  mixed[]  $events
+     */
+    public function send($events): TransportResult
     {
         $this->batches[] = $events;
 
@@ -33,12 +36,11 @@ class FakeTransport implements Transport
     /**
      * @param  list<array<string, mixed>>  $events
      */
-    public static function accepted(array $events): TransportResult
+    public static function accepted($events): TransportResult
     {
-        return new TransportResult(202, null, null, array_map(
-            fn (array $e) => ['id' => $e['id'] ?? null, 'status' => 'accepted', 'issue' => '01JTESTISSUE'],
-            $events,
-        ));
+        return new TransportResult(202, null, null, array_map(function (array $e) {
+            return ['id' => $e['id'] ?? null, 'status' => 'accepted', 'issue' => '01JTESTISSUE'];
+        }, $events));
     }
 
     /**

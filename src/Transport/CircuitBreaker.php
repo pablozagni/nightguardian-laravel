@@ -12,6 +12,16 @@ use Throwable;
  */
 class CircuitBreaker
 {
+    /**
+     * @var string
+     */
+    private $path;
+
+    /**
+     * @var Clock
+     */
+    private $clock;
+
     public const BASE_SECONDS = 60;
 
     public const MAX_SECONDS = 900;
@@ -20,9 +30,13 @@ class CircuitBreaker
     private const PROBE_SECONDS = 10;
 
     /** @var array{open_until: float, failures: int, probing_until: float, reason: ?string, opened_at: float}|null */
-    private ?array $state = null;
+    private $state;
 
-    public function __construct(private string $path, private Clock $clock) {}
+    public function __construct(string $path, Clock $clock)
+    {
+        $this->path = $path;
+        $this->clock = $clock;
+    }
 
     /**
      * True when a network attempt may be made now.
@@ -62,8 +76,10 @@ class CircuitBreaker
 
     /**
      * A failure the collector may recover from: back off 60 s, doubling per consecutive failure, up to 15 min.
+     *
+     * @param  string  $reason
      */
-    public function recordFailure(string $reason): void
+    public function recordFailure($reason): void
     {
         $failures = $this->state()['failures'] + 1;
         $seconds = (int) min(self::MAX_SECONDS, self::BASE_SECONDS * (2 ** min($failures - 1, 10)));
@@ -73,8 +89,11 @@ class CircuitBreaker
 
     /**
      * Opens for a fixed time (rate limit, rejected token) without escalating the backoff.
+     *
+     * @param  int  $seconds
+     * @param  string  $reason
      */
-    public function trip(int $seconds, string $reason): void
+    public function trip($seconds, $reason): void
     {
         $this->open($seconds, $reason, $this->state()['failures']);
     }

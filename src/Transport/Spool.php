@@ -14,19 +14,40 @@ use Throwable;
  */
 class Spool
 {
+    /**
+     * @var string
+     */
+    private $directory;
+
+    /**
+     * @var int
+     */
+    private $maxBytes;
+
+    /**
+     * @var int
+     */
+    private $maxAgeDays;
+
+    /**
+     * @var Clock
+     */
+    private $clock;
+
     private const EXTENSION = '.json.gz';
 
-    public function __construct(
-        private string $directory,
-        private int $maxBytes,
-        private int $maxAgeDays,
-        private Clock $clock,
-    ) {}
+    public function __construct(string $directory, int $maxBytes, int $maxAgeDays, Clock $clock)
+    {
+        $this->directory = $directory;
+        $this->maxBytes = $maxBytes;
+        $this->maxAgeDays = $maxAgeDays;
+        $this->clock = $clock;
+    }
 
     /**
      * @param  list<array<string, mixed>>  $events
      */
-    public function write(array $events): bool
+    public function write($events): bool
     {
         if ($events === []) {
             return true;
@@ -90,9 +111,10 @@ class Spool
     }
 
     /**
+     * @param  string  $path
      * @return list<array<string, mixed>>|null null when the file is unreadable or corrupt
      */
-    public function read(string $path): ?array
+    public function read($path): ?array
     {
         try {
             $raw = @file_get_contents($path);
@@ -109,7 +131,10 @@ class Spool
         }
     }
 
-    public function delete(string $path): void
+    /**
+     * @param  string  $path
+     */
+    public function delete($path): void
     {
         @unlink($path);
     }

@@ -10,5 +10,5 @@ interface Transport
     /**
      * @param  list<array<string, mixed>>  $events
      */
-    public function send(array $events): TransportResult;
+    public function send($events): TransportResult;
 }
