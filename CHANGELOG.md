@@ -5,17 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-18
+
+First stable release of the 1.x line (Laravel 5.8–8, PHP 7.1+): the 2.x code base converted to PHP 7.1 syntax.
+
+Differences from 2.x (see `docs/compatibility.md`): PHP `^7.1.3|^8.0` and `illuminate/* ^5.8|^6|^7|^8` instead of
+PHP 8.1+ and Laravel 9–13; `Support\ObjectMap` instead of `WeakMap`; a handler decorator that declares `Exception $e` for
+PHP 7.1 (Laravel 5.8/6); listeners registered through the container; the CI runs the full Pest suite on Laravel 7 and 8
+(PHP 7.4–8.1) and a PHPUnit smoke suite on Laravel 5.8 and 6 (PHP 7.1–7.4). The entries below describe the 2.x
+development history this line was ported from.
+
 ### Added
 - Test suite hardening: every app under test has no collector URL/token, a fake transport and a throwaway storage
   directory; `NoRealNetworkTest` fails if a real collector is configured without `NIGHTGUARDIAN_E2E=1`; real-collector
   checks are opt-in in `tests/E2E` (documented in CONTRIBUTING.md).
 - Project documentation, architecture, protocol v1 and build plan.
-- Package skeleton for the 2.x line: `composer.json` (PHP ^8.1, Laravel 9�13, no runtime dependencies beyond
+- Package skeleton for the 2.x line: `composer.json` (PHP ^8.1, Laravel 9–13, no runtime dependencies beyond
   `illuminate/*`, `ext-curl`, `ext-json`, `ext-zlib`), auto-discovered service provider, `NightGuardian` facade,
   publishable `config/nightguardian.php` with every option from `docs/configuration.md`.
 - Inactive mode: without URL and token (or with `NIGHTGUARDIAN_ENABLED=false`, or without `ext-curl`) the SDK does
   nothing and can say why.
-- GitHub Actions: lint, static analysis and a test matrix for Laravel 9�13 on PHP 8.1�8.4 (one `--prefer-lowest` job).
+- GitHub Actions: lint, static analysis and a test matrix for Laravel 9–13 on PHP 8.1–8.4 (one `--prefer-lowest` job).
 - Pest + Orchestra Testbench test suite, Pint and Larastan (level 6).
 - `EventFactory`: builds protocol v1 events for every type (`exception`, `log`, `job_failed`, `schedule_failed`,
   `slow_request`, `slow_query`, `deploy`, `feedback`, `test`) with UUID v4 ids, UTC millisecond timestamps, tags, user,
