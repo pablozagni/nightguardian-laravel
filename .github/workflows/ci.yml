@@ -87,16 +87,7 @@ jobs:
       - name: Show installed versions
         run: composer show | grep -E '^(laravel/framework|orchestra/testbench|pestphp/pest|phpunit/phpunit) '
       - name: Run tests
-        run: |
-          set +e
-          composer test > ci-out.txt 2>&1
-          code=$?
-          cat ci-out.txt
-          if [ $code -ne 0 ]; then
-            echo "::error title=Tests failed::$(sed 's/\[[0-9;]*m//g' ci-out.txt | grep -vE '^\s*$' | tail -n 45 | cut -c1-200 | sed ':a;N;$!ba;s/
-/%0A/g')"
-          fi
-          exit $code
+        run: bash tools/ci-run.sh composer test
 
   smoke:
     # Laravel 5.8 and PHP 7.1/7.2 cannot run Pest: a PHPUnit smoke suite covers the core there.
@@ -128,13 +119,4 @@ jobs:
       - name: Show installed versions
         run: composer show | grep -E '^(laravel/framework|orchestra/testbench|phpunit/phpunit) '
       - name: Run tests
-        run: |
-          set +e
-          vendor/bin/phpunit --testsuite Smoke > ci-out.txt 2>&1
-          code=$?
-          cat ci-out.txt
-          if [ $code -ne 0 ]; then
-            echo "::error title=Tests failed::$(sed 's/\[[0-9;]*m//g' ci-out.txt | grep -vE '^\s*$' | tail -n 45 | cut -c1-200 | sed ':a;N;$!ba;s/
-/%0A/g')"
-          fi
-          exit $code
+        run: bash tools/ci-run.sh vendor/bin/phpunit --testsuite Smoke
