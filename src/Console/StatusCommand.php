@@ -78,7 +78,7 @@ class StatusCommand extends Command
             $this->warn($warning);
         }
 
-        return self::SUCCESS;
+        return 0;
     }
 
     /**

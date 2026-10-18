@@ -154,7 +154,9 @@ it('never throws, whatever the URL', function (string $url) {
 it('encodes events containing invalid UTF-8 instead of failing', function () {
     $result = ngCurl('ok')->send([['id' => 'bad-utf8', 'type' => 'log', 'payload' => ['message' => "broken \xB1\x31 text"]]]);
 
-    expect($result->status)->toBe(202)->and(ngLastRequest()['body']['events'][0]['id'])->toBe('bad-utf8');
+    expect($result->error)->toBeNull()
+        ->and($result->status)->toBe(202)
+        ->and(ngLastRequest()['body']['events'][0]['id'])->toBe('bad-utf8');
 });
 
 function ngLastRequest(): array

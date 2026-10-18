@@ -22,7 +22,7 @@ class TestCommand extends Command
             $this->error("NightGuardian is inactive: {$reason}");
             $this->line('Set NIGHTGUARDIAN_URL and NIGHTGUARDIAN_TOKEN (see `php artisan nightguardian:status`).');
 
-            return self::FAILURE;
+            return 1;
         }
 
         $warning = StatusCommand::insecureUrlWarning($client);
@@ -57,7 +57,7 @@ class TestCommand extends Command
 
             $this->line('    Open the project in your collector panel: the event should be listed as a test issue.');
 
-            return self::SUCCESS;
+            return 0;
         }
 
         if ($result->rejected > 0) {
@@ -69,20 +69,20 @@ class TestCommand extends Command
                 }
             }
 
-            return self::FAILURE;
+            return 1;
         }
 
         if ($result->status === 401 || $result->status === 403) {
             $this->error("The collector rejected the token (HTTP {$result->status}). Check NIGHTGUARDIAN_TOKEN: it must belong to an active project token.");
             $this->line('The event was kept in the spool and will be sent once the token works.');
 
-            return self::FAILURE;
+            return 1;
         }
 
         if ($result->status === 400) {
             $this->error('The collector refused the request as malformed (HTTP 400). The event was discarded.');
 
-            return self::FAILURE;
+            return 1;
         }
 
         if ($result->spooled > 0) {
@@ -105,12 +105,12 @@ class TestCommand extends Command
             $this->line("The event was saved in the spool ({$dispatcher->spool()->count()} batch(es) waiting) and will be sent automatically when the collector answers again.");
             $this->line('Run `php artisan nightguardian:status` for details or `php artisan nightguardian:flush` to retry now.');
 
-            return self::SUCCESS;
+            return 0;
         }
 
         $this->error('The event could not be sent nor saved in the spool (is the storage directory writable?).');
         $this->line('Run `php artisan nightguardian:status` for details.');
 
-        return self::FAILURE;
+        return 1;
     }
 }

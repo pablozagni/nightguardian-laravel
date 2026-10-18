@@ -25,7 +25,7 @@ class DeployCommand extends Command
         if ($reason !== null) {
             $this->error("NightGuardian is inactive: {$reason}");
 
-            return self::FAILURE;
+            return 1;
         }
 
         $git = $release->gitInfo();
@@ -34,7 +34,7 @@ class DeployCommand extends Command
         if ($name === null) {
             $this->error('No release name: pass --release=... or set NIGHTGUARDIAN_RELEASE (no git repository found).');
 
-            return self::FAILURE;
+            return 1;
         }
 
         $event = $client->factory()->deploy([
@@ -50,18 +50,18 @@ class DeployCommand extends Command
         if ($result->delivered > 0 && $result->spooled === 0) {
             $this->info("OK  Deploy marker sent for release {$name}.");
 
-            return self::SUCCESS;
+            return 0;
         }
 
         if ($result->spooled > 0) {
             $this->warn('The collector could not take the deploy marker now'.($result->error !== null ? " ({$result->error})" : '').'. It was saved in the spool and will be sent later.');
 
-            return self::SUCCESS;
+            return 0;
         }
 
         $this->error('The deploy marker was not delivered'.($result->error !== null ? ": {$result->error}" : '.'));
 
-        return self::FAILURE;
+        return 1;
     }
 
     private function text(string $option): ?string

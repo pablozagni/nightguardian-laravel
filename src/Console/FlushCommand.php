@@ -19,7 +19,7 @@ class FlushCommand extends Command
         if ($reason !== null) {
             $this->error("NightGuardian is inactive: {$reason}");
 
-            return self::FAILURE;
+            return 1;
         }
 
         $before = $dispatcher->spool()->count();
@@ -27,7 +27,7 @@ class FlushCommand extends Command
         if ($before === 0) {
             $this->info('The spool is empty: nothing to send.');
 
-            return self::SUCCESS;
+            return 0;
         }
 
         $result = $dispatcher->drain(true, true);
@@ -38,11 +38,11 @@ class FlushCommand extends Command
         if ($remaining > 0) {
             $this->warn("{$remaining} batch(es) still waiting".($result->error !== null ? ": {$result->error}" : '.'));
 
-            return self::SUCCESS;
+            return 0;
         }
 
         $this->info('The spool is empty.');
 
-        return self::SUCCESS;
+        return 0;
     }
 }
