@@ -39,7 +39,7 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-      - run: composer config audit.block-insecure false
+      - run: composer config audit.block-insecure false || true
       - run: composer require "laravel/framework:8.*" "orchestra/testbench:^6.0" --dev --no-interaction --no-update
       - run: composer update --prefer-dist --no-interaction --with-all-dependencies
       - run: composer lint
@@ -52,7 +52,7 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-      - run: composer config audit.block-insecure false
+      - run: composer config audit.block-insecure false || true
       - run: composer require "laravel/framework:8.*" "orchestra/testbench:^6.0" --dev --no-interaction --no-update
       - run: composer update --prefer-dist --no-interaction --with-all-dependencies
       - run: composer analyse
@@ -79,7 +79,9 @@ jobs:
           extensions: curl, json, zlib, mbstring
           coverage: none
       - name: Allow end-of-life Laravel releases
-        run: composer config audit.block-insecure false
+        run: composer config audit.block-insecure false || true
+      - name: Drop the formatter (it needs PHP 8.1+; lint runs in its own job)
+        run: composer remove laravel/pint --dev --no-interaction --no-update
       - name: Pin Laravel and Testbench
         run: composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
       - name: Install dependencies
@@ -109,7 +111,7 @@ jobs:
           extensions: curl, json, zlib, mbstring
           coverage: none
       - name: Allow end-of-life Laravel releases
-        run: composer config audit.block-insecure false
+        run: composer config audit.block-insecure false || true
       - name: Drop the tools that need a newer PHP
         run: composer remove pestphp/pest pestphp/pest-plugin-laravel laravel/pint phpstan/phpstan opis/json-schema --dev --no-interaction --no-update
       - name: Pin Laravel and Testbench
