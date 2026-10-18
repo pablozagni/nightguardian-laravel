@@ -4,6 +4,7 @@ namespace NightGuardian\Laravel\Transport;
 
 use NightGuardian\Laravel\Support\Clock;
 use NightGuardian\Laravel\Support\Json;
+use NightGuardian\Laravel\Support\StorageDirectory;
 use Throwable;
 
 /**
@@ -33,7 +34,7 @@ class Spool
         }
 
         try {
-            if (! is_dir($this->directory) && ! @mkdir($this->directory, 0775, true) && ! is_dir($this->directory)) {
+            if (! StorageDirectory::ensure($this->directory)) {
                 return false;
             }
 

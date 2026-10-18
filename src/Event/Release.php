@@ -2,6 +2,7 @@
 
 namespace NightGuardian\Laravel\Event;
 
+use NightGuardian\Laravel\Support\StorageDirectory;
 use Throwable;
 
 /**
@@ -185,7 +186,7 @@ class Release
         }
 
         try {
-            if (! is_dir($this->storagePath) && ! @mkdir($this->storagePath, 0775, true) && ! is_dir($this->storagePath)) {
+            if (! StorageDirectory::ensure($this->storagePath)) {
                 return;
             }
 
