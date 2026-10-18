@@ -161,8 +161,11 @@ class NightGuardianServiceProvider extends ServiceProvider
                 __DIR__.'/../config/nightguardian.php' => $this->app->configPath('nightguardian.php'),
             ], 'nightguardian-config');
 
-            $this->commands([TestCommand::class, StatusCommand::class, FlushCommand::class, DeployCommand::class]);
         }
+
+        // Registered in every context (not only in a console) so that Artisan::call('nightguardian:...') works
+        // from a web request, a deploy hook or a queued job.
+        $this->commands([TestCommand::class, StatusCommand::class, FlushCommand::class, DeployCommand::class]);
 
         Guard::run(function () {
             if (NightGuardian::inactiveReasonFor($this->config($this->app)) === null) {

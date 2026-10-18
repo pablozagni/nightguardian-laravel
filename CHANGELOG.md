@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-18
+
+### Fixed
+- The `nightguardian:*` Artisan commands are now registered in every context, not only in a console, so
+  `Artisan::call('nightguardian:status')` (or `:deploy`, `:test`, `:flush`) works from a web request, a deploy hook or a job.
+- A failed scheduled task no longer produces a second, redundant exception event: Laravel reports
+  "Scheduled command [...] failed with exit code" in the parent process after the `schedule_failed` event was already
+  sent, and the SDK now recognises and skips it. One failed task is one `schedule_failed` (plus, at most, the real exception
+  of the command's own process).
+- Exception events now carry `request.status_code`: the code of an HTTP exception or 500 when captured, replaced by the status
+  of the response that was actually sent once the error page decorator sees it. Handled exceptions (`NightGuardian::report()`)
+  and exceptions outside a request have none.
+
 ## [2.0.0] - 2026-10-18
 
 First stable release of the 2.x line (Laravel 9–13, PHP 8.1+).

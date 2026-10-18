@@ -3,6 +3,7 @@
 use NightGuardian\Laravel\Support\Json;
 use NightGuardian\Laravel\Tests\ActiveTestCase;
 use NightGuardian\Laravel\Tests\TestCase;
+use NightGuardian\Laravel\Tests\WebContextTestCase;
 use NightGuardian\Laravel\Transport\Buffer;
 use NightGuardian\Laravel\Transport\Transport;
 use Opis\JsonSchema\Errors\ErrorFormatter;
@@ -10,6 +11,7 @@ use Opis\JsonSchema\Validator;
 
 uses(TestCase::class)->in('Feature', 'Unit', 'E2E');
 uses(ActiveTestCase::class)->in('Capture', 'Transport');
+uses(WebContextTestCase::class)->in('Web');
 
 /**
  * Events captured so far in the current app (not yet flushed).

@@ -38,6 +38,11 @@ class ScheduleListener
     {
         Guard::run(function () use ($event) {
             if (isset($this->reported[$event->task])) {
+                // The task already produced its schedule_failed event (from its exit code). Laravel is now about to
+                // report "Scheduled command [...] failed with exit code" as an exception: mark it as seen so it is
+                // not captured a second time.
+                $this->client->alreadyCaptured($event->exception);
+
                 return;
             }
 
