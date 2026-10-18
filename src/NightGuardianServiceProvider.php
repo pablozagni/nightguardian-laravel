@@ -146,23 +146,39 @@ class NightGuardianServiceProvider extends ServiceProvider
     /**
      * Hooks into Laravel. Nothing is registered while the SDK is inactive, so an inactive SDK costs nothing.
      */
+    /**
+     * Registers `Class::method` as a listener through the container. Laravel 5.8 treats `[Class::class, 'method']`
+     * as a static callable, newer versions as a class listener; a closure behaves the same everywhere.
+     *
+     * @param  \Illuminate\Contracts\Events\Dispatcher  $events
+     * @param  string  $event
+     * @param  string  $class
+     * @param  string  $method
+     */
+    private function listen($events, $event, $class, $method): void
+    {
+        $events->listen($event, function (...$arguments) use ($class, $method) {
+            return $this->app->make($class)->{$method}(...$arguments);
+        });
+    }
+
     private function registerCapture(): void
     {
         $config = $this->config($this->app);
         $events = $this->app['events'];
 
-        $events->listen(MessageLogged::class, [LogListener::class, 'handle']);
-        $events->listen(JobFailed::class, [QueueListener::class, 'handle']);
-        $events->listen(ScheduledTaskStarting::class, [ScheduleListener::class, 'starting']);
-        $events->listen(ScheduledTaskFailed::class, [ScheduleListener::class, 'failed']);
-        $events->listen(ScheduledTaskFinished::class, [ScheduleListener::class, 'finished']);
+        $this->listen($events, MessageLogged::class, LogListener::class, 'handle');
+        $this->listen($events, JobFailed::class, QueueListener::class, 'handle');
+        $this->listen($events, ScheduledTaskStarting::class, ScheduleListener::class, 'starting');
+        $this->listen($events, ScheduledTaskFailed::class, ScheduleListener::class, 'failed');
+        $this->listen($events, ScheduledTaskFinished::class, ScheduleListener::class, 'finished');
 
         $slowQueryMs = (int) ($config['slow_query_ms'] ?? 0);
         $slowRequestMs = (int) ($config['slow_request_ms'] ?? 0);
 
         // Slow requests also need the query counter, so the listener runs when either feature is on.
         if ($slowQueryMs > 0 || $slowRequestMs > 0) {
-            $events->listen(QueryExecuted::class, [SlowQueryListener::class, 'handle']);
+            $this->listen($events, QueryExecuted::class, SlowQueryListener::class, 'handle');
         }
 
         if ($slowRequestMs > 0 && ! $this->app->runningInConsole()) {
