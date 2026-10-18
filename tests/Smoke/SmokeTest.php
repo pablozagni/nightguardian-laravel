@@ -36,7 +36,9 @@ class SmokeTest extends ActiveTestCase
 
         $events = $this->captured();
 
-        $this->assertCount(1, $events);
+        $this->assertCount(1, $events, 'events: '.json_encode(array_map(function ($event) {
+            return [$event['type'], $event['payload']['message'] ?? ($event['payload']['exceptions'][0]['message'] ?? '')];
+        }, $events)));
         $this->assertSame('exception', $events[0]['type']);
         $this->assertSame('Gateway down', $events[0]['payload']['exceptions'][0]['message']);
         $this->assertSame(1, preg_match('/^NG-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/', $events[0]['reference']));

@@ -82,6 +82,9 @@ jobs:
         run: composer config audit.block-insecure false || true
       - name: Drop the formatter (it needs PHP 8.1+; lint runs in its own job)
         run: composer remove laravel/pint --dev --no-interaction --no-update
+      - name: Drop the Pest Laravel plugin on Laravel 6 (it needs Laravel 7+; the tests do not use it)
+        if: matrix.laravel == '6.*'
+        run: composer remove pestphp/pest-plugin-laravel --dev --no-interaction --no-update
       - name: Pin Laravel and Testbench
         run: composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
       - name: Install dependencies
