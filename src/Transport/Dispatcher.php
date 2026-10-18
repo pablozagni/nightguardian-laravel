@@ -4,6 +4,7 @@ namespace NightGuardian\Laravel\Transport;
 
 use NightGuardian\Laravel\Support\Clock;
 use NightGuardian\Laravel\Support\Guard;
+use NightGuardian\Laravel\Support\StorageDirectory;
 use Throwable;
 
 /**
@@ -351,7 +352,7 @@ class Dispatcher implements Sender
         try {
             $directory = dirname($this->lockPath);
 
-            if (! is_dir($directory) && ! @mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            if (! StorageDirectory::ensure($directory)) {
                 return null;
             }
 

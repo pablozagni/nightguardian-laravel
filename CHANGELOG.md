@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-18
+
+Same fix as 2.0.2, ported to the 1.x line.
+
+### Fixed
+- The SDK now writes `storage/nightguardian/.gitignore` (`*` and `!.gitignore`) the first time it creates that folder, so the spool,
+  lock, statistics and release cache can no longer be committed by accident. Existing folders are left untouched: add
+  `/storage/nightguardian/` to your `.gitignore` if the files are already tracked (`git rm -r --cached storage/nightguardian`).
+
 ## [1.0.1] - 2026-10-18
 
 Same fixes as 2.0.1, ported to the 1.x line.
