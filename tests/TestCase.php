@@ -39,7 +39,12 @@ abstract class TestCase extends Orchestra
         $app['config']->set('nightguardian.url', '');
         $app['config']->set('nightguardian.token', '');
         $app->singleton(Transport::class, FakeTransport::class);
-        $app->useStoragePath(sys_get_temp_dir().'/ng-storage-'.bin2hex(random_bytes(5)));
+        $storage = sys_get_temp_dir().'/ng-storage-'.bin2hex(random_bytes(5));
+        // The skeleton's own folders (logs, framework caches) must exist in the throwaway storage.
+        foreach (['logs', 'framework/cache', 'framework/views', 'framework/sessions', 'app'] as $folder) {
+            mkdir($storage.'/'.$folder, 0777, true);
+        }
+        $app->useStoragePath($storage);
     }
 
     protected function getPackageProviders($app): array

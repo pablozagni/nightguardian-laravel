@@ -19,7 +19,7 @@ class StatusCommand extends Command
         $reason = $client->inactiveReason();
 
         $this->line('NightGuardian SDK '.NightGuardian::VERSION);
-        $this->newLine();
+        $this->line('');
 
         $this->row('Status', $reason === null ? 'active' : "INACTIVE - {$reason}");
         $this->row('Collector', $client->ingestUrl() ?? '(not set)');
@@ -31,7 +31,7 @@ class StatusCommand extends Command
         $this->row('Slow query', $this->threshold($config['slow_query_ms'] ?? 0));
         $this->row('Timeouts', sprintf('connect %ss, total %ss', $config['connect_timeout'] ?? 1, $config['timeout'] ?? 2));
 
-        $this->newLine();
+        $this->line('');
 
         $breaker = $dispatcher->breaker()->status();
         $this->row('Circuit breaker', (function () use ($breaker) {
@@ -50,7 +50,7 @@ class StatusCommand extends Command
         $this->row('Spool', sprintf('%d batch(es), %s%s', $spool->count(), $this->bytes($spool->bytes()), $age !== null ? ", oldest {$this->age($age)} old" : ''));
         $this->row('Spool directory', $spool->directory().($spool->isWritable() ? '' : '  (NOT WRITABLE)'));
 
-        $this->newLine();
+        $this->line('');
 
         $stats = $dispatcher->stats()->all();
         $this->row('Events sent', (string) ($stats['sent_events'] ?? 0));
@@ -74,7 +74,7 @@ class StatusCommand extends Command
         ]);
 
         foreach ($warnings as $warning) {
-            $this->newLine();
+            $this->line('');
             $this->warn($warning);
         }
 

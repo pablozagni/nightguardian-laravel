@@ -3,3 +3,6 @@ parameters:
     paths:
         - src
     treatPhpDocTypesAsCertain: false
+    excludePaths:
+        # Declares `Exception $e` as the Laravel 5.8/6 handler contract does; the analysed Laravel 8 declares Throwable.
+        - src/Capture/LegacyExceptionHandlerDecorator.php

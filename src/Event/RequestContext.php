@@ -4,6 +4,7 @@ namespace NightGuardian\Laravel\Event;
 
 use Illuminate\Http\Request;
 use NightGuardian\Laravel\Privacy\Scrubber;
+use NightGuardian\Laravel\Support\Json;
 use Throwable;
 
 /**
@@ -145,7 +146,7 @@ class RequestContext
 
         $input = $this->scrubber->scrub($input);
 
-        if (strlen((string) json_encode($input, JSON_PARTIAL_OUTPUT_ON_ERROR)) > self::MAX_BODY_BYTES) {
+        if (strlen((string) Json::partial($input)) > self::MAX_BODY_BYTES) {
             return ['_truncated' => true, 'keys' => array_slice(array_map('strval', array_keys($input)), 0, 50)];
         }
 

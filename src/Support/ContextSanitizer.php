@@ -4,7 +4,6 @@ namespace NightGuardian\Laravel\Support;
 
 use Closure;
 use JsonSerializable;
-use Stringable;
 use Throwable;
 use UnitEnum;
 
@@ -85,7 +84,7 @@ final class ContextSanitizer
             return $value instanceof \BackedEnum ? $value->value : $value->name;
         }
 
-        if ($value instanceof Stringable) {
+        if (is_object($value) && method_exists($value, '__toString')) {
             return self::value((string) $value, $depth + 1);
         }
 

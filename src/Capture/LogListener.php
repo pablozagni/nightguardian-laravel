@@ -5,7 +5,7 @@ namespace NightGuardian\Laravel\Capture;
 use Illuminate\Log\Events\MessageLogged;
 use NightGuardian\Laravel\NightGuardian;
 use NightGuardian\Laravel\Support\Guard;
-use Stringable;
+use NightGuardian\Laravel\Support\Json;
 use Throwable;
 
 /**
@@ -57,10 +57,10 @@ class LogListener
             return $message;
         }
 
-        if ($message instanceof Stringable) {
+        if (is_object($message) && method_exists($message, '__toString')) {
             return (string) $message;
         }
 
-        return (string) json_encode($message, JSON_PARTIAL_OUTPUT_ON_ERROR);
+        return (string) Json::partial($message);
     }
 }
