@@ -50,6 +50,24 @@ class Buffer
     }
 
     /**
+     * Changes an event that is still buffered (it is not sent until the request ends).
+     *
+     * @param  callable(array<string, mixed>): array<string, mixed>  $change
+     */
+    public function amend(string $id, callable $change): bool
+    {
+        foreach ($this->events as $index => $event) {
+            if (($event['id'] ?? null) === $id) {
+                $this->events[$index] = $change($event);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Removes and returns everything buffered.
      *
      * @return list<array<string, mixed>>

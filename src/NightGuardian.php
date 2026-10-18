@@ -47,7 +47,7 @@ class NightGuardian
      */
     private $stats;
 
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.0.1';
 
     public const SDK_NAME = 'nightguardian-laravel';
 
@@ -223,6 +223,13 @@ class NightGuardian
 
         $options = ['level' => $level, 'handled' => $handled];
 
+        // An exception nobody caught ends the request with an error response: HTTP exceptions carry their code,
+        // anything else becomes a 500. The error page decorator later replaces it with the real response status.
+        // (Ignored when there is no request, e.g. in a console.)
+        if (! $handled) {
+            $options['status_code'] = $throwable instanceof HttpExceptionInterface ? $throwable->getStatusCode() : 500;
+        }
+
         if ($context !== []) {
             $options['context'] = ContextSanitizer::sanitize($context);
         }
@@ -234,6 +241,29 @@ class NightGuardian
         }
 
         $this->push($event);
+    }
+
+    /**
+     * Records the status of the response that was actually sent for an exception, on its event if still buffered.
+     */
+    public function recordResponseStatus(Throwable $throwable, int $status): void
+    {
+        // contain(), not run(): this is called from inside the exception handler decorator's own guarded section.
+        Guard::contain(function () use ($throwable, $status) {
+            $captured = $this->references[$throwable] ?? null;
+
+            if ($captured === null || $this->buffer === null) {
+                return;
+            }
+
+            $this->buffer->amend($captured['id'], function (array $event) use ($status) {
+                if (isset($event['request']) && is_array($event['request'])) {
+                    $event['request']['status_code'] = $status;
+                }
+
+                return $event;
+            });
+        });
     }
 
     /**

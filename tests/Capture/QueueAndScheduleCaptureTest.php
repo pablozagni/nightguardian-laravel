@@ -140,3 +140,34 @@ it('includes the tail of the task output when the task writes to a file', functi
 
     expect(strlen($tail))->toBe(2048)->and($tail)->toEndWith('THE LAST LINE');
 });
+
+// --- the exception Laravel reports when a scheduled task failed -----------------------------------------------
+
+it('turns a failed scheduled task into one schedule_failed event, not two events', function () {
+    $task = ngTask();
+    $task->exitCode = 1;
+
+    // What Laravel's schedule:run does when the command exits with a non-zero code:
+    event(new ScheduledTaskStarting($task));
+    event(new ScheduledTaskFinished($task, 0.4));
+
+    $laravelException = new Exception('Scheduled command [php artisan demo:fail] failed with exit code [1].');
+    event(new ScheduledTaskFailed($task, $laravelException));
+    // ...and then the exception handler reports that exception to the log:
+    Log::error($laravelException->getMessage(), ['exception' => $laravelException]);
+
+    $types = array_column(ngCaptured(), 'type');
+
+    expect($types)->toBe(['schedule_failed']);
+});
+
+it('reports a scheduled task that throws as one schedule_failed event with its exception', function () {
+    $task = ngTask();
+
+    $exception = new RuntimeException('Boom inside the task');
+    event(new ScheduledTaskStarting($task));
+    event(new ScheduledTaskFailed($task, $exception));
+    Log::error($exception->getMessage(), ['exception' => $exception]);
+
+    expect(array_column(ngCaptured(), 'type'))->toBe(['schedule_failed']);
+});

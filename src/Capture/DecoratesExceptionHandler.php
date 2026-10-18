@@ -112,6 +112,8 @@ trait DecoratesExceptionHandler
             return $response;
         }
 
+        $this->client->recordResponseStatus($e, $response->getStatusCode());
+
         if ($request->expectsJson()) {
             $response->headers->set(self::HEADER, $captured['reference']);
 
