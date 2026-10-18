@@ -2,6 +2,7 @@
 
 namespace NightGuardian\Laravel\Tests;
 
+use Monolog\Handler\NullHandler;
 use NightGuardian\Laravel\Event\StackTrace;
 use NightGuardian\Laravel\Support\Clock;
 use NightGuardian\Laravel\Tests\Fakes\FakeClock;
@@ -39,6 +40,8 @@ abstract class ActiveTestCase extends TestCase
 
         // Errors raised by the code under test must not end up in a real log file.
         $app['config']->set('logging.default', 'null');
+        // Older Testbench skeletons (Laravel 5.8/6) have no `null` channel.
+        $app['config']->set('logging.channels.null', ['driver' => 'monolog', 'handler' => NullHandler::class]);
 
         // Signing the feedback form needs an application key; older Testbench skeletons do not set one.
         $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('k', 32)));

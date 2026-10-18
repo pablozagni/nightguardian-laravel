@@ -96,6 +96,44 @@ class SmokeTest extends ActiveTestCase
         $this->assertStringNotContainsString('Kaboom', $response->getContent());
     }
 
+    public function test_the_comment_of_the_error_page_reaches_the_collector_as_a_feedback_event()
+    {
+        $this->app['config']->set('app.debug', false);
+        Route::get('/boom', function () {
+            throw new RuntimeException('Kaboom');
+        });
+
+        $html = $this->get('/boom', ['Accept' => 'text/html'])->getContent();
+        $fields = [];
+
+        foreach (['event_id', 'reference', 'expires', 'signature'] as $name) {
+            preg_match('/<input type="hidden" name="'.$name.'" value="([^"]*)"/', $html, $match);
+            $fields[$name] = isset($match[1]) ? $match[1] : '';
+        }
+
+        $response = $this->post('/nightguardian/feedback', $fields + ['comment' => 'I clicked Confirm twice'], ['Accept' => 'text/html']);
+
+        $response->assertOk();
+        $this->assertStringContainsString('your message was sent', $response->getContent());
+
+        $feedback = array_values(array_filter($this->transport()->events(), function ($event) {
+            return $event['type'] === 'feedback';
+        }));
+
+        $this->assertCount(1, $feedback);
+        $this->assertSame($fields['event_id'], $feedback[0]['payload']['event_id']);
+        $this->assertSame('I clicked Confirm twice', $feedback[0]['payload']['comment']);
+    }
+
+    public function test_the_status_and_test_commands_run()
+    {
+        $this->assertSame(0, Artisan::call('nightguardian:status'));
+        $this->assertStringContainsString('collector.test', Artisan::output());
+
+        $this->assertSame(0, Artisan::call('nightguardian:test'));
+        $this->assertStringContainsString('accepted the test event', Artisan::output());
+    }
+
     public function test_the_object_map_remembers_objects_without_keeping_them_alive()
     {
         $map = new ObjectMap;

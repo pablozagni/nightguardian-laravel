@@ -58,17 +58,17 @@ jobs:
       - run: composer analyse
 
   tests:
-    # Full Pest suite: needs PHP 7.4+ (Pest 1 and the JSON schema validator) and Laravel 6+ (PHPUnit 9).
+    # Full Pest suite: needs PHP 7.4+ (Pest 1 and the JSON schema validator) and Laravel 7+ (Pest's dependencies conflict with Laravel 6's Symfony 4;
+    # Laravel 5.8 and 6 run the smoke suite below).
     name: tests (Laravel ${{ matrix.laravel }}, PHP ${{ matrix.php }}${{ matrix.stability == 'prefer-lowest' && ', lowest' || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { laravel: '6.*', testbench: '^4.0', php: '7.4', stability: prefer-stable }
-          - { laravel: '6.*', testbench: '^4.0', php: '7.4', stability: prefer-lowest }
           - { laravel: '7.*', testbench: '^5.0', php: '7.4', stability: prefer-stable }
           - { laravel: '8.*', testbench: '^6.0', php: '7.4', stability: prefer-stable }
+          - { laravel: '8.*', testbench: '^6.0', php: '7.4', stability: prefer-lowest }
           - { laravel: '8.*', testbench: '^6.0', php: '8.0', stability: prefer-stable }
           - { laravel: '8.*', testbench: '^6.0', php: '8.1', stability: prefer-stable }
     steps:
@@ -82,9 +82,6 @@ jobs:
         run: composer config audit.block-insecure false || true
       - name: Drop the formatter (it needs PHP 8.1+; lint runs in its own job)
         run: composer remove laravel/pint --dev --no-interaction --no-update
-      - name: Drop the Pest Laravel plugin on Laravel 6 (it needs Laravel 7+; the tests do not use it)
-        if: matrix.laravel == '6.*'
-        run: composer remove pestphp/pest-plugin-laravel --dev --no-interaction --no-update
       - name: Pin Laravel and Testbench
         run: composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
       - name: Install dependencies
@@ -106,6 +103,8 @@ jobs:
           - { laravel: '5.8.*', testbench: '^3.8', php: '7.1', stability: prefer-lowest }
           - { laravel: '5.8.*', testbench: '^3.8', php: '7.3', stability: prefer-stable }
           - { laravel: '6.*', testbench: '^4.0', php: '7.2', stability: prefer-stable }
+          - { laravel: '6.*', testbench: '^4.0', php: '7.2', stability: prefer-lowest }
+          - { laravel: '6.*', testbench: '^4.0', php: '7.4', stability: prefer-stable }
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
