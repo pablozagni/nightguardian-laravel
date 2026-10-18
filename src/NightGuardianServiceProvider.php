@@ -20,6 +20,7 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\ServiceProvider;
 use NightGuardian\Laravel\Capture\ExceptionHandlerDecorator;
+use NightGuardian\Laravel\Capture\LegacyExceptionHandlerDecorator;
 use NightGuardian\Laravel\Capture\LogListener;
 use NightGuardian\Laravel\Capture\QueueListener;
 use NightGuardian\Laravel\Capture\RequestStats;
@@ -235,11 +236,14 @@ class NightGuardianServiceProvider extends ServiceProvider
     private function registerErrorPage(): void
     {
         $this->app->extend(ExceptionHandler::class, function (ExceptionHandler $handler, Application $app) {
-            if ($handler instanceof ExceptionHandlerDecorator) {
+            if ($handler instanceof ExceptionHandlerDecorator || $handler instanceof LegacyExceptionHandlerDecorator) {
                 return $handler;
             }
 
-            return new ExceptionHandlerDecorator($handler, $app->make(NightGuardian::class), $app->make(ViewFactory::class), $app->make(FeedbackSigner::class), $app->make(ConfigRepository::class));
+            // PHP 7.1 cannot widen parameter types, so it needs the decorator that declares `Exception $e`.
+            $decorator = PHP_VERSION_ID < 70200 ? LegacyExceptionHandlerDecorator::class : ExceptionHandlerDecorator::class;
+
+            return new $decorator($handler, $app->make(NightGuardian::class), $app->make(ViewFactory::class), $app->make(FeedbackSigner::class), $app->make(ConfigRepository::class));
         });
 
         if ((bool) ($this->config($this->app)['feedback'] ?? true)) {

@@ -546,7 +546,10 @@ class EventFactory
             ? $given
             : ($this->clock !== null ? ($this->clock)() : new DateTimeImmutable('now'));
 
-        return DateTimeImmutable::createFromInterface($time)
+        // DateTimeImmutable::createFromInterface() is PHP 8.0+.
+        $moment = $time instanceof DateTimeImmutable ? $time : DateTimeImmutable::createFromFormat('U.u', $time->format('U.u'));
+
+        return $moment
             ->setTimezone(new DateTimeZone('UTC'))
             ->format('Y-m-d\TH:i:s.v\Z');
     }
