@@ -152,7 +152,7 @@ it('never throws, whatever the URL', function (string $url) {
 })->with(['', 'not a url', 'ftp://127.0.0.1:1/x', 'http://']);
 
 it('encodes events containing invalid UTF-8 instead of failing', function () {
-    $result = ngCurl('ok')->send([['id' => 'bad-utf8', 'type' => 'log', 'payload' => ['message' => "broken \xB1\x31 text"]]]);
+    $result = ngCurl('ok', 6.0)->send([['id' => 'bad-utf8', 'type' => 'log', 'payload' => ['message' => "broken \xB1\x31 text"]]]);
 
     expect($result->error)->toBeNull()
         ->and($result->status)->toBe(202)
