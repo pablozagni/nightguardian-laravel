@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Added
+- Test suite hardening: every app under test has no collector URL/token, a fake transport and a throwaway storage
+  directory; `NoRealNetworkTest` fails if a real collector is configured without `NIGHTGUARDIAN_E2E=1`; real-collector
+  checks are opt-in in `tests/E2E` (documented in CONTRIBUTING.md).
 - Project documentation, architecture, protocol v1 and build plan.
 - Package skeleton for the 2.x line: `composer.json` (PHP ^8.1, Laravel 9–13, no runtime dependencies beyond
   `illuminate/*`, `ext-curl`, `ext-json`, `ext-zlib`), auto-discovered service provider, `NightGuardian` facade,

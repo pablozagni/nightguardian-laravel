@@ -8,7 +8,7 @@ use NightGuardian\Laravel\Transport\Transport;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Validator;
 
-uses(TestCase::class)->in('Feature', 'Unit');
+uses(TestCase::class)->in('Feature', 'Unit', 'E2E');
 uses(ActiveTestCase::class)->in('Capture', 'Transport');
 
 /**

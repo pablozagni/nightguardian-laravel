@@ -22,6 +22,8 @@ abstract class ActiveTestCase extends TestCase
 
     protected function defineEnvironment($app): void
     {
+        parent::defineEnvironment($app);
+
         $app['config']->set('nightguardian', array_replace($app['config']->get('nightguardian', []), [
             'enabled' => true,
             'url' => 'http://collector.test',
