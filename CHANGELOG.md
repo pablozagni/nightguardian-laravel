@@ -5,17 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-18
+
+First stable release of the 2.x line (Laravel 9â€“13, PHP 8.1+).
+
 ### Added
 - Test suite hardening: every app under test has no collector URL/token, a fake transport and a throwaway storage
   directory; `NoRealNetworkTest` fails if a real collector is configured without `NIGHTGUARDIAN_E2E=1`; real-collector
   checks are opt-in in `tests/E2E` (documented in CONTRIBUTING.md).
 - Project documentation, architecture, protocol v1 and build plan.
-- Package skeleton for the 2.x line: `composer.json` (PHP ^8.1, Laravel 9–13, no runtime dependencies beyond
+- Package skeleton for the 2.x line: `composer.json` (PHP ^8.1, Laravel 9â€“13, no runtime dependencies beyond
   `illuminate/*`, `ext-curl`, `ext-json`, `ext-zlib`), auto-discovered service provider, `NightGuardian` facade,
   publishable `config/nightguardian.php` with every option from `docs/configuration.md`.
 - Inactive mode: without URL and token (or with `NIGHTGUARDIAN_ENABLED=false`, or without `ext-curl`) the SDK does
   nothing and can say why.
-- GitHub Actions: lint, static analysis and a test matrix for Laravel 9–13 on PHP 8.1–8.4 (one `--prefer-lowest` job).
+- GitHub Actions: lint, static analysis and a test matrix for Laravel 9â€“13 on PHP 8.1â€“8.4 (one `--prefer-lowest` job).
 - Pest + Orchestra Testbench test suite, Pint and Larastan (level 6).
 - `EventFactory`: builds protocol v1 events for every type (`exception`, `log`, `job_failed`, `schedule_failed`,
   `slow_request`, `slow_query`, `deploy`, `feedback`, `test`) with UUID v4 ids, UTC millisecond timestamps, tags, user,

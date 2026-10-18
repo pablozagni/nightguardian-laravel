@@ -1,5 +1,7 @@
 # 🌙 NightGuardian para Laravel
 
+[![CI](https://github.com/pablozagni/nightguardian-laravel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pablozagni/nightguardian-laravel/actions/workflows/ci.yml?query=branch%3Amain) [![Latest version](https://img.shields.io/packagist/v/nightguardian/laravel?label=packagist)](https://packagist.org/packages/nightguardian/laravel) [![PHP](https://img.shields.io/packagist/dependency-v/nightguardian/laravel/php?label=php)](https://packagist.org/packages/nightguardian/laravel) [![License: MIT](https://img.shields.io/github/license/pablozagni/nightguardian-laravel)](LICENSE)
+
 SDK oficial de Laravel para [NightGuardian](https://github.com/pablozagni/nightguardian), monitoreo de
 errores self-hosted y open source.
 
