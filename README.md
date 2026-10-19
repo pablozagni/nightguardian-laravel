@@ -61,11 +61,71 @@ NightGuardian::message('Payment gateway answered late', 'warning', ['gateway' =>
 
 | Command | |
 |---|---|
+| `nightguardian:setup` | Writes the URL and token to `.env`, checks the connection |
 | `nightguardian:test` | Sends a test event and shows the collector's answer |
 | `nightguardian:status` | Config check, spool size, circuit breaker state |
 | `nightguardian:flush` | Sends everything waiting in the spool now |
 | `nightguardian:deploy` | Records a deploy (release, commit, branch) |
 
+## One app, many installations
+
+A SaaS where every customer runs its own copy of the same app (one folder, one `.env`, one domain each) is the same code
+reporting the same bugs from many places. Choose how the collector should see them:
+
+| | **A. One shared token** | **B. One token per installation** |
+|---|---|---|
+| Collector | one project | one project per installation |
+| The same bug in 30 installations | **one issue** (30× the events) | 30 issues, one in each project |
+| Where does it happen? | the panel lists the affected **hosts** | the project is the installation |
+| Alerts | once per new bug | once per installation |
+| Access control | everybody sees everything | give each team or customer only its project |
+| Retention, rate limit, tokens | shared | independent |
+
+**Pick A** when you own and operate the app and want to fix bugs once: you care about *what* breaks and *how widely*.
+**Pick B** when installations are operated or paid for separately, customers may see their own project, or one noisy
+installation must never hide or rate-limit the others.
+
+Every event carries a `host` tag automatically: the host of `APP_URL` (e.g. `yapai.head-office.com.ar`), also on jobs, the
+scheduler and logs. It is what lets model A tell the installations apart. Set `NIGHTGUARDIAN_HOST_TAG=false` to turn it
+off; a `host` tag you set yourself (in `config/nightguardian.php` → `tags`, or per event) is always respected. Make sure every
+installation has its own `APP_URL`.
+
+### Connect an installation
+
+```bash
+php artisan nightguardian:setup --url=https://ng.example.com --token=ng_...
+```
+
+Without options it asks for the URL and the token (hidden). It checks the token starts with `ng_` and the URL is `https://`
+(plain `http://` only warns), writes `NIGHTGUARDIAN_URL` and `NIGHTGUARDIAN_TOKEN` to the `.env` (the rest of the file,
+its permissions and its owner are untouched), caches the configuration again if it was cached, and sends a test event
+(skip it with `--no-test`). It never prints the token, can be run again safely and exits with an error code if anything fails.
+
+### Many installations on one server
+
+Run it as the user that owns each `.env` so the files keep their owner. Model A (one shared token):
+
+```bash
+read -rsp "Project token: " TOKEN; echo
+for app in /var/www/customer-*/; do
+  echo "== $app"
+  (cd "$app" && sudo -u www-data php8.3 artisan nightguardian:setup --url=https://ng.example.com --token="$TOKEN") || echo "FAILED: $app"
+done
+unset TOKEN
+```
+
+Model B (a token per installation, asked one by one):
+
+```bash
+for app in /var/www/customer-*/; do
+  read -rsp "Token for $(basename "$app"): " TOKEN; echo
+  (cd "$app" && sudo -u www-data php8.3 artisan nightguardian:setup --url=https://ng.example.com --token="$TOKEN") || echo "FAILED: $app"
+done
+unset TOKEN
+```
+
+The token is briefly visible in the process list while each command runs; on a shared server prefer typing it when the
+command asks for it.
 ## Friendly error page
 
 When an unexpected error ends in a **500** on an **HTML** request and `APP_DEBUG=false`, visitors see a small,

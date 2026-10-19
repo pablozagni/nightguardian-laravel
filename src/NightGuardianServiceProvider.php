@@ -29,6 +29,7 @@ use NightGuardian\Laravel\Capture\SlowQueryListener;
 use NightGuardian\Laravel\Capture\SlowRequestMiddleware;
 use NightGuardian\Laravel\Console\DeployCommand;
 use NightGuardian\Laravel\Console\FlushCommand;
+use NightGuardian\Laravel\Console\SetupCommand;
 use NightGuardian\Laravel\Console\StatusCommand;
 use NightGuardian\Laravel\Console\TestCommand;
 use NightGuardian\Laravel\Event\EventFactory;
@@ -138,7 +139,7 @@ class NightGuardianServiceProvider extends ServiceProvider
 
         // Registered in every context (not only in a console) so that Artisan::call('nightguardian:...') works
         // from a web request, a deploy hook or a queued job.
-        $this->commands([TestCommand::class, StatusCommand::class, FlushCommand::class, DeployCommand::class]);
+        $this->commands([SetupCommand::class, TestCommand::class, StatusCommand::class, FlushCommand::class, DeployCommand::class]);
 
         Guard::run(function () {
             if (NightGuardian::inactiveReasonFor($this->config($this->app)) === null) {
@@ -274,6 +275,9 @@ class NightGuardianServiceProvider extends ServiceProvider
     {
         /** @var array<string, mixed> $config */
         $config = $app['config']->get('nightguardian', []);
+
+        // The host tag is derived from the application's own URL.
+        $config['app_url'] = $app['config']->get('app.url');
 
         return $config;
     }

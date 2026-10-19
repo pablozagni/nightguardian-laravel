@@ -37,6 +37,65 @@ php artisan nightguardian:test
 
 Marcar un deploy desde tu script de actualización: `php artisan nightguardian:deploy`.
 
+## Una app, muchas instalaciones
+
+En un SaaS donde cada cliente corre su propia copia de la misma app (una carpeta, un `.env`, un dominio por cliente) el
+mismo código reporta los mismos bugs desde muchos lugares. Elegí cómo querés verlos en el colector:
+
+| | **A. Un token compartido** | **B. Un token por instalación** |
+|---|---|---|
+| Colector | un solo proyecto | un proyecto por instalación |
+| El mismo bug en 30 instalaciones | **un solo issue** (con 30× los eventos) | 30 issues, uno en cada proyecto |
+| ¿Dónde ocurre? | el panel lista los **hosts** afectados | el proyecto es la instalación |
+| Avisos | una vez por bug nuevo | una vez por instalación |
+| Accesos | todos ven todo | cada equipo o cliente ve solo su proyecto |
+| Retención, límite de tasa, tokens | compartidos | independientes |
+
+**Elegí A** cuando la app es tuya y la operás vos y querés arreglar cada bug una sola vez: te importa *qué* se rompe y
+*cuánto* se extiende. **Elegí B** cuando las instalaciones las operan o pagan por separado, los clientes pueden ver su propio
+proyecto, o una instalación ruidosa no debe tapar ni limitar a las demás.
+
+Todo evento lleva automáticamente la etiqueta `host`: el host de `APP_URL` (por ejemplo `yapai.head-office.com.ar`),
+también en jobs, scheduler y logs. Es lo que permite distinguir las instalaciones en el modelo A. Se desactiva con
+`NIGHTGUARDIAN_HOST_TAG=false`; una etiqueta `host` que ya mandes vos (en `config/nightguardian.php` → `tags`, o por
+evento) se respeta siempre. Verificá que cada instalación tenga su propio `APP_URL`.
+
+### Conectar una instalación
+
+```bash
+php artisan nightguardian:setup --url=https://ng.ejemplo.com --token=ng_...
+```
+
+Sin opciones pide la URL y el token (oculto). Valida que el token empiece con `ng_` y que la URL sea `https://` (con
+`http://` solo advierte), escribe `NIGHTGUARDIAN_URL` y `NIGHTGUARDIAN_TOKEN` en el `.env` (el resto del archivo, sus
+permisos y su dueño no se tocan), vuelve a cachear la configuración si estaba cacheada y manda un evento de prueba
+(se omite con `--no-test`). Nunca imprime el token, se puede repetir sin riesgo y termina con código de error si algo falla.
+
+### Muchas instalaciones en un mismo server
+
+Ejecutalo con el usuario dueño de cada `.env` para que los archivos conserven su dueño. Modelo A (un token compartido):
+
+```bash
+read -rsp "Token del proyecto: " TOKEN; echo
+for app in /var/www/cliente-*/; do
+  echo "== $app"
+  (cd "$app" && sudo -u www-data php8.3 artisan nightguardian:setup --url=https://ng.ejemplo.com --token="$TOKEN") || echo "FALLÓ: $app"
+done
+unset TOKEN
+```
+
+Modelo B (un token por instalación, pedido uno por uno):
+
+```bash
+for app in /var/www/cliente-*/; do
+  read -rsp "Token de $(basename "$app"): " TOKEN; echo
+  (cd "$app" && sudo -u www-data php8.3 artisan nightguardian:setup --url=https://ng.ejemplo.com --token="$TOKEN") || echo "FALLÓ: $app"
+done
+unset TOKEN
+```
+
+Mientras corre cada comando el token se ve un instante en la lista de procesos; en un server compartido es preferible
+tipearlo cuando el comando lo pide.
 ## Página de error amable
 
 Cuando un error inesperado termina en un **500** en una petición **HTML** y `APP_DEBUG=false`, el visitante ve una

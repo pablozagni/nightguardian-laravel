@@ -80,6 +80,10 @@ return [
         'x-requested-with',
     ],
 
+    // Tag every event with `host`, the host of APP_URL, so one collector project can tell many installations of the same
+    // app apart. A `host` tag set in `tags` (or per event) always wins.
+    'host_tag' => (bool) env('NIGHTGUARDIAN_HOST_TAG', true),
+
     // Static tags added to every event (name => value).
     'tags' => [],
 

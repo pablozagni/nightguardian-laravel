@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-19
+
+Same features as 2.1.0, ported to the 1.x line (Laravel 5.8 to 8, PHP 7.1+).
+
+### Added
+- `php artisan nightguardian:setup [--url=] [--token=] [--no-test]`: connects an installation in one step. It asks for what is
+  missing (the token with hidden input), checks that the token starts with `ng_` and that the URL is `https://` (plain `http://`
+  only warns), writes `NIGHTGUARDIAN_URL` and `NIGHTGUARDIAN_TOKEN` to the `.env` without touching the rest of the file, its
+  permissions or its owner (missing keys are appended), caches the configuration again when it was cached and sends a test
+  event. It never prints the token, is idempotent and exits with an error code when anything fails.
+- Every event is tagged with `host`, the host of `APP_URL`, jobs, scheduler and logs included, so apps with many installations
+  can share one collector project and still see where a bug happens. `NIGHTGUARDIAN_HOST_TAG=false` turns it off; a `host`
+  tag set by the app (configuration or per event) is respected. `nightguardian:status` shows the setting.
+- Documentation "One app, many installations" (README, README.es, `docs/configuration.md`): shared token vs one token per
+  installation, when to use each and a loop to set up many installations on one server.
+
 ## [1.0.2] - 2026-10-18
 
 Same fix as 2.0.2, ported to the 1.x line.
