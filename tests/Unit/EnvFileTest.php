@@ -74,5 +74,7 @@ it('quotes only the values that need it', function (string $value, string $line)
 ]);
 
 it('fails clearly when the file is missing', function () {
-    expect(fn () => EnvFile::set(sys_get_temp_dir().'/ng-missing-'.bin2hex(random_bytes(4)), ['A' => '1']))->toThrow(RuntimeException::class, 'does not exist');
+    expect(function () {
+        EnvFile::set(sys_get_temp_dir().'/ng-missing-'.bin2hex(random_bytes(4)), ['A' => '1']);
+    })->toThrow(RuntimeException::class, 'does not exist');
 });
