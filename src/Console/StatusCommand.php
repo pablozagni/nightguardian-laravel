@@ -25,6 +25,7 @@ class StatusCommand extends Command
         $this->row('Collector', $client->ingestUrl() ?? '(not set)');
         $this->row('Token', $this->maskToken($config['token'] ?? null));
         $this->row('Environment', (string) ($config['environment'] ?? ''));
+        $this->row('Host tag', ($config['host_tag'] ?? true) ? 'on (host of APP_URL)' : 'off');
         $this->row('Release', $release->resolve() ?? '(none)');
         $this->row('Log level', (string) ($config['log_level'] ?? 'error'));
         $this->row('Slow request', $this->threshold($config['slow_request_ms'] ?? 0));

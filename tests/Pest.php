@@ -38,7 +38,7 @@ function ngSchemaErrors(array ...$events): array
     $schema = json_decode((string) file_get_contents(__DIR__.'/fixtures/event.v1.schema.json'));
     $batch = json_decode(Json::encode([
         'sent_at' => '2026-10-17T13:45:12.345Z',
-        'sdk' => ['name' => 'nightguardian-laravel', 'version' => '2.0.0'],
+        'sdk' => ['name' => 'nightguardian-laravel', 'version' => '2.1.0'],
         'events' => $events,
     ]));
 

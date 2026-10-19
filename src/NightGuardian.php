@@ -22,7 +22,7 @@ use WeakMap;
  */
 class NightGuardian
 {
-    public const VERSION = '2.0.2';
+    public const VERSION = '2.1.0';
 
     public const SDK_NAME = 'nightguardian-laravel';
 

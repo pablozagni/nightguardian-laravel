@@ -497,7 +497,8 @@ class EventFactory
     private function tags(mixed $extra): array
     {
         $configured = $this->config['tags'] ?? [];
-        $tags = [];
+        $host = $this->host();
+        $tags = $host !== null ? ['host' => $host] : [];
 
         foreach ([is_array($configured) ? $configured : [], is_array($extra) ? $extra : []] as $source) {
             foreach ($source as $name => $value) {
@@ -518,6 +519,21 @@ class EventFactory
         }
 
         return $tags;
+    }
+
+    /**
+     * The host of APP_URL (no scheme, port or path), the automatic `host` tag. Null when disabled or unknown.
+     */
+    private function host(): ?string
+    {
+        if (! ($this->config['host_tag'] ?? true)) {
+            return null;
+        }
+
+        $url = $this->config['app_url'] ?? null;
+        $host = is_string($url) && $url !== '' ? parse_url(str_contains($url, '://') ? $url : '//'.$url, PHP_URL_HOST) : null;
+
+        return is_string($host) && $host !== '' ? strtolower($host) : null;
     }
 
     private function string(mixed $value): ?string

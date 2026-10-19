@@ -509,7 +509,7 @@ it('is wired in the container using the application configuration', function () 
 
     expect($event['environment'])->toBe('staging')
         ->and($event['release'])->toBe('wired-1')
-        ->and($event['tags'])->toBe(['team' => 'billing'])
+        ->and($event['tags'])->toBe(['host' => 'localhost', 'team' => 'billing'])
         ->and($event['context'])->toBe(['cuit' => '[Filtered]'])
         ->and($event['runtime']['framework_version'])->toBe(app()->version())
         ->and($event)->not->toHaveKey('request')
@@ -523,4 +523,51 @@ it('does not query the database to find the user', function () {
     $event = app(EventFactory::class)->exception(ngException());
 
     expect($event)->not->toHaveKey('user');
+});
+
+// --- the automatic `host` tag ----------------------------------------------------------------------------------
+
+it('tags every event with the host of APP_URL', function (string $appUrl, string $host) {
+    $factory = ngFactory(['app_url' => $appUrl]);
+
+    $event = $factory->exception(ngException());
+
+    expect($event['tags'])->toBe(['host' => $host])
+        ->and($factory->log('error', 'boom')['tags'])->toBe(['host' => $host])
+        ->and($factory->jobFailed('App\Jobs\Pay', 'default', 'database', 1, ngException())['tags'])->toBe(['host' => $host])
+        ->and($factory->scheduleFailed('inspire', '* * * * *', 1, null, null)['tags'])->toBe(['host' => $host])
+        ->and(ngSchemaErrors($event))->toBe([]);
+})->with([
+    'https' => ['https://yapai.head-office.example.com', 'yapai.head-office.example.com'],
+    'port and path' => ['http://Shop.Example.COM:8080/app', 'shop.example.com'],
+    'no scheme' => ['tenant.example.org', 'tenant.example.org'],
+]);
+
+it('keeps the host tag the app already sends, in the configuration or per event', function () {
+    $configured = ngFactory(['app_url' => 'https://a.example.com', 'tags' => ['host' => 'custom-host', 'team' => 'x']]);
+    $perEvent = ngFactory(['app_url' => 'https://a.example.com']);
+
+    expect($configured->exception(ngException())['tags'])->toBe(['host' => 'custom-host', 'team' => 'x'])
+        ->and($perEvent->exception(ngException(), ['tags' => ['host' => 'per-event']])['tags'])->toBe(['host' => 'per-event']);
+});
+
+it('adds no host tag when it is disabled or APP_URL is unusable', function (array $config) {
+    expect(ngFactory($config)->exception(ngException()))->not->toHaveKey('tags');
+})->with([
+    'disabled' => [['app_url' => 'https://a.example.com', 'host_tag' => false]],
+    'no url' => [[]],
+    'empty url' => [['app_url' => '']],
+    'not a string' => [['app_url' => null]],
+]);
+
+it('reads the host tag settings from the application configuration', function () {
+    config(['app.url' => 'https://client-7.saas.test', 'nightguardian.tags' => []]);
+    app()->forgetInstance(EventFactory::class);
+
+    expect(app(EventFactory::class)->exception(ngException())['tags'])->toBe(['host' => 'client-7.saas.test']);
+
+    config(['nightguardian.host_tag' => false]);
+    app()->forgetInstance(EventFactory::class);
+
+    expect(app(EventFactory::class)->exception(ngException()))->not->toHaveKey('tags');
 });
