@@ -3,11 +3,13 @@
 namespace NightGuardian\Laravel\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Foundation\Application;
 use NightGuardian\Laravel\Event\EventFactory;
 use NightGuardian\Laravel\NightGuardian;
 use NightGuardian\Laravel\Support\EnvFile;
 use NightGuardian\Laravel\Transport\Dispatcher;
 use NightGuardian\Laravel\Transport\Transport;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -40,7 +42,7 @@ class SetupCommand extends Command
             $this->warn('The collector URL uses http://: the token and the events travel unencrypted. Use https:// unless this is a local test.');
         }
 
-        $envPath = $this->laravel->environmentFilePath();
+        $envPath = $this->application()->environmentFilePath();
 
         try {
             $changed = EnvFile::set($envPath, ['NIGHTGUARDIAN_URL' => $url, 'NIGHTGUARDIAN_TOKEN' => $token]);
@@ -132,7 +134,7 @@ class SetupCommand extends Command
      */
     private function refreshConfiguration()
     {
-        if (! is_file($this->laravel->getCachedConfigPath())) {
+        if (! is_file($this->application()->getCachedConfigPath())) {
             return true;
         }
 
@@ -166,7 +168,7 @@ class SetupCommand extends Command
         config(['nightguardian.url' => $url, 'nightguardian.token' => $token]);
 
         foreach ([NightGuardian::class, EventFactory::class, Dispatcher::class, Transport::class] as $abstract) {
-            $this->laravel->forgetInstance($abstract);
+            $this->application()->forgetInstance($abstract);
         }
     }
 
@@ -175,17 +177,29 @@ class SetupCommand extends Command
      */
     private function sendTest()
     {
-        $spooled = $this->laravel->make(Dispatcher::class)->spool()->count();
+        $spooled = $this->application()->make(Dispatcher::class)->spool()->count();
 
         $code = $this->call('nightguardian:test');
 
         // nightguardian:test succeeds when the event was only saved in the spool: here that means "not confirmed".
-        if ($code === 0 && $this->laravel->make(Dispatcher::class)->spool()->count() > $spooled) {
+        if ($code === 0 && $this->application()->make(Dispatcher::class)->spool()->count() > $spooled) {
             $this->error('The settings were saved, but the collector did not confirm the test event. Check the URL and your network.');
 
             return 1;
         }
 
         return $code === 0 ? 0 : 1;
+    }
+
+    /**
+     * @return Application
+     */
+    private function application()
+    {
+        if (! $this->laravel instanceof Application) {
+            throw new RuntimeException('NightGuardian needs a Laravel application to run this command.');
+        }
+
+        return $this->laravel;
     }
 }
